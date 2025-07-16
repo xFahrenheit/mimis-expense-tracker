@@ -79,6 +79,69 @@ window.addEventListener('DOMContentLoaded', async () => {
         const th = document.getElementById(id);
         if (th) th.addEventListener('click', () => toggleSort(id.replace('th-','')));
     });
+    // Helper to show inline autofill input (move to top-level scope)
+    window.showAutofillInput = function(mode) {
+        const bar = document.getElementById('filterbar-who');
+        if (!bar) return;
+        // Remove any existing autofill input
+        let existing = bar.querySelector('.autofill-inline-input');
+        if (existing) existing.remove();
+        // Create input group
+        const div = document.createElement('div');
+        div.className = 'autofill-inline-input flex gap-2 mt-2';
+        div.innerHTML = `
+            <input type="text" id="autofill-who-input" name="autofill-who-input" class="autofill-who-input rounded px-2 py-1 text-xs border" placeholder="Enter spender name..." style="min-width:120px;" />
+            <button class="autofill-confirm-btn btn-pastel">OK</button>
+            <button class="autofill-cancel-btn btn-pastel bg-gray-200 text-gray-700">Cancel</button>
+        `;
+        bar.appendChild(div);
+        const input = div.querySelector('.autofill-who-input');
+        input.focus();
+        // Decouple autofill from Who filter dropdown: hide dropdown while autofill input is open
+        const whoFilter = document.getElementById('filter-who');
+        if (whoFilter) whoFilter.style.display = 'none';
+        // Confirm logic
+        const confirm = async () => {
+            const value = input.value.trim();
+            if (!value) { input.focus(); return; }
+            div.querySelectorAll('button').forEach(btn => btn.disabled = true);
+            let success = true;
+            // Patch: always use all visible rows, regardless of Who filter dropdown
+            let ids;
+            if (mode === 'all') {
+                ids = allExpenses.filter(e => filteredExpenses.some(f => f.id === e.id)).map(e => e.id);
+            } else if (mode === 'selected') {
+                ids = (typeof getSelectedExpenseIds === 'function') ? getSelectedExpenseIds() : [];
+                if (!ids.length) { alert('Select at least one row.'); div.remove(); return; }
+            }
+            for (const id of ids) {
+                const res = await fetch(`${API_URL}/expense/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ who: value })
+                });
+                if (!res.ok) success = false;
+            }
+            await loadExpenses();
+            if (!success) {
+                alert('Some updates failed. Please check your connection or try again.');
+            }
+            div.remove();
+        };
+        div.querySelector('.autofill-confirm-btn').onclick = () => {
+            confirm();
+            if (whoFilter) whoFilter.style.display = '';
+        };
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') {
+            confirm();
+            if (whoFilter) whoFilter.style.display = '';
+        }});
+        div.querySelector('.autofill-cancel-btn').onclick = () => {
+            div.remove();
+            if (whoFilter) whoFilter.style.display = '';
+        };
+    };
+
     // Filter bar show/hide logic
     document.querySelectorAll('.filter-arrow').forEach(arrow => {
         arrow.addEventListener('click', (e) => {
@@ -90,65 +153,6 @@ window.addEventListener('DOMContentLoaded', async () => {
             });
             if (bar) {
                 bar.style.display = (bar.style.display === 'none' || bar.style.display === '') ? 'block' : 'none';
-                // --- Patch: Always re-attach autofill button listeners when Who filter bar is shown ---
-                if (col === 'who' && bar.style.display === 'block') {
-                    // Helper to show inline autofill input
-                    function showAutofillInput(mode) {
-                        // Remove any existing autofill input
-                        let existing = bar.querySelector('.autofill-inline-input');
-                        if (existing) existing.remove();
-                        // Create input group
-                        const div = document.createElement('div');
-                        div.className = 'autofill-inline-input flex gap-2 mt-2';
-                    div.innerHTML = `
-                        <input type="text" id="autofill-who-input" name="autofill-who-input" class="autofill-who-input rounded px-2 py-1 text-xs border" placeholder="Enter spender name..." style="min-width:120px;" />
-                        <button class="autofill-confirm-btn btn-pastel">OK</button>
-                        <button class="autofill-cancel-btn btn-pastel bg-gray-200 text-gray-700">Cancel</button>
-                    `;
-                        bar.appendChild(div);
-                        const input = div.querySelector('.autofill-who-input');
-                        input.focus();
-                        // Confirm logic
-                        const confirm = async () => {
-                            const value = input.value.trim();
-                            if (!value) { input.focus(); return; }
-                            div.querySelectorAll('button').forEach(btn => btn.disabled = true);
-                            if (mode === 'all') {
-                                const ids = filteredExpenses.map(e => e.id);
-                                for (const id of ids) {
-                                    await fetch(`${API_URL}/expense/${id}`, {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ who: value })
-                                    });
-                                }
-                            } else if (mode === 'selected') {
-                                const ids = (typeof getSelectedExpenseIds === 'function') ? getSelectedExpenseIds() : [];
-                                if (!ids.length) { alert('Select at least one row.'); div.remove(); return; }
-                                for (const id of ids) {
-                                    await fetch(`${API_URL}/expense/${id}`, {
-                                        method: 'PATCH',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ who: value })
-                                    });
-                                }
-                            }
-                            await loadExpenses();
-                            div.remove();
-                        };
-                        div.querySelector('.autofill-confirm-btn').onclick = confirm;
-                        input.addEventListener('keydown', e => { if (e.key === 'Enter') confirm(); });
-                        div.querySelector('.autofill-cancel-btn').onclick = () => div.remove();
-                    }
-                    const autofillWhoAllBtn = document.getElementById('autofillWhoAllBtn');
-                    if (autofillWhoAllBtn) {
-                        autofillWhoAllBtn.onclick = () => showAutofillInput('all');
-                    }
-                    const autofillWhoSelectedBtn = document.getElementById('autofillWhoSelectedBtn');
-                    if (autofillWhoSelectedBtn) {
-                        autofillWhoSelectedBtn.onclick = () => showAutofillInput('selected');
-                    }
-                }
             }
         });
     });
@@ -346,9 +350,41 @@ uploadForm.addEventListener('submit', async (e) => {
 async function loadExpenses() {
     const res = await fetch(`${API_URL}/expenses`);
     const expenses = await res.json();
+    allExpenses = expenses;
     renderExpenses(expenses);
     renderFilters(expenses);
     renderCharts(expenses);
+    // Update total spending blocks
+    const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    let gautami = 0, ameya = 0, splitTotal = 0;
+    for (const e of expenses) {
+        if (e.split_cost) {
+            splitTotal += Number(e.amount || 0);
+            // Each gets half of split expense
+            if (e.who === 'Gautami') {
+                gautami += Number(e.amount || 0) / 2;
+                ameya += Number(e.amount || 0) / 2;
+            } else if (e.who === 'Ameya') {
+                gautami += Number(e.amount || 0) / 2;
+                ameya += Number(e.amount || 0) / 2;
+            } else {
+                // If neither, just split between both
+                gautami += Number(e.amount || 0) / 2;
+                ameya += Number(e.amount || 0) / 2;
+            }
+        } else {
+            if (e.who === 'Gautami') gautami += Number(e.amount || 0);
+            if (e.who === 'Ameya') ameya += Number(e.amount || 0);
+        }
+    }
+    const days = new Set(expenses.map(e => e.date)).size || 1;
+    const months = new Set(expenses.map(e => (e.date||'').slice(0,7))).size || 1;
+    document.getElementById('totalSpendingValue').textContent = `$${total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    document.getElementById('gautamiSpendingValue').textContent = `$${gautami.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    document.getElementById('ameyaSpendingValue').textContent = `$${ameya.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    document.getElementById('splitSpendingValue').textContent = `$${(splitTotal/2).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    document.getElementById('avgPerDay').textContent = `${(total/days).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}/day`;
+    document.getElementById('avgPerMonth').textContent = `${(total/months).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}/mo`;
 }
 
 // --- Helper: Get last N months as YYYY-MM strings ---
@@ -388,14 +424,17 @@ function renderQuickFilterChips(expenses) {
     const chipDiv = document.getElementById('quickFilterChips');
     if (!chipDiv) return;
     chipDiv.innerHTML = '';
-    // Top 4 categories, 2 cards, 2 spenders
+    // Top 4 categories, 2 cards, 2 spenders, need/luxury
     const catCounts = {};
     const cardCounts = {};
     const whoCounts = {};
+    const needCounts = { 'Need': 0, 'Luxury': 0 };
     expenses.forEach(e => {
         if (e.category) catCounts[e.category] = (catCounts[e.category]||0)+1;
         if (e.card) cardCounts[e.card] = (cardCounts[e.card]||0)+1;
         if (e.who) whoCounts[e.who] = (whoCounts[e.who]||0)+1;
+        if (e.need_category === 'Luxury') needCounts['Luxury']++;
+        else needCounts['Need']++;
     });
     function topN(obj, n) {
         return Object.entries(obj).sort((a,b)=>b[1]-a[1]).slice(0,n).map(x=>x[0]);
@@ -404,18 +443,75 @@ function renderQuickFilterChips(expenses) {
     topN(catCounts,4).forEach(c=>chips.push({type:'category',label:c}));
     topN(cardCounts,2).forEach(c=>chips.push({type:'card',label:c}));
     topN(whoCounts,2).forEach(c=>chips.push({type:'who',label:c}));
+    ['Need','Luxury'].forEach(n=>chips.push({type:'need_category',label:n}));
+    // Emoji map for chips
+    const emojiMap = {
+        // Categories (add/adjust as needed)
+        'groceries': '🛒',
+        'food': '🍽️',
+        'shopping': '🛍️',
+        'travel': '✈️',
+        'utilities': '💡',
+        'health': '🩺',
+        'entertainment': '🎬',
+        'subscriptions': '📦',
+        'transport': '🚗',
+        'rent': '🏠',
+        'other': '❓',
+        // Cards
+        'chase sapphire': '💳',
+        'venture x': '💳',
+        'discover': '💳',
+        // Spenders
+        'Gautami': '👩',
+        'Ameya': '👨',
+        // Need/Luxury
+        'Need': '🟢',
+        'Luxury': '💎',
+    };
     chips.forEach(chip => {
         const btn = document.createElement('button');
         btn.className = 'quick-chip';
-        btn.textContent = chip.label;
+        // Always show emoji for known types, but for custom (like Gautami, Ameya, Venture X), show text
+        let lowerLabel = chip.label?.toLowerCase();
+        let emoji = emojiMap[lowerLabel] || emojiMap[chip.label] || '';
+        let isCustom = ['venture x','gautami','ameya'].includes(lowerLabel);
+        btn.textContent = isCustom ? chip.label : (emoji ? `${emoji}` : chip.label);
+        btn.title = chip.label;
+        // On hover: switch to text, on mouseout: switch back to emoji (unless custom)
+        if (!isCustom && emoji) {
+            btn.addEventListener('mouseenter', () => { btn.textContent = chip.label; });
+            btn.addEventListener('mouseleave', () => { btn.textContent = emoji; });
+        }
         btn.onclick = () => {
             if (chip.type==='category') document.getElementById('filter-category').value = chip.label;
             if (chip.type==='card') document.getElementById('filter-card').value = chip.label;
             if (chip.type==='who') document.getElementById('filter-who').value = chip.label;
+            if (chip.type==='need_category') document.getElementById('filter-needcat').value = chip.label;
             applyColumnFilters();
+            renderQuickFilterChips(allExpenses);
         };
         chipDiv.appendChild(btn);
     });
+    // Add clear button if any filter is active
+    const categoryVal = document.getElementById('filter-category').value;
+    const cardVal = document.getElementById('filter-card').value;
+    const whoVal = document.getElementById('filter-who').value;
+    const needVal = document.getElementById('filter-needcat')?.value;
+    if (categoryVal || cardVal || whoVal || needVal) {
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'quick-chip clear-chip';
+        clearBtn.textContent = 'Clear';
+        clearBtn.onclick = () => {
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-card').value = '';
+            document.getElementById('filter-who').value = '';
+            if (document.getElementById('filter-needcat')) document.getElementById('filter-needcat').value = '';
+            applyColumnFilters();
+            renderQuickFilterChips(allExpenses);
+        };
+        chipDiv.appendChild(clearBtn);
+    }
 }
 
 // --- Helper: Render recent large expenses ---
@@ -524,7 +620,7 @@ function renderExpenses(expenses) {
     // --- Render averages ---
     renderAverages(expenses);
     // --- Render quick filter chips ---
-    renderQuickFilterChips(expenses);
+    renderQuickFilterChips(allExpenses);
     // --- Render recent large expenses ---
     renderRecentLargeExpenses(expenses);
     const tbody = document.getElementById('expensesTableBody');
@@ -667,6 +763,45 @@ function renderExpenses(expenses) {
             <td class="py-2 px-3 editable-cell" data-field="notes" data-id="${exp.id}">${exp.notes || ''}</td>
         `;
         tbody.appendChild(tr);
+        // Attach split checkbox event listener
+        const splitCb = tr.querySelector('.split-checkbox');
+        if (splitCb) {
+            splitCb.addEventListener('change', async (e) => {
+                const checked = splitCb.checked;
+                await fetch(`${API_URL}/expense/${exp.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ split_cost: checked })
+                });
+                loadExpenses();
+            });
+        }
+        // Attach outlier checkbox event listener
+        const outlierCb = tr.querySelector('.outlier-checkbox');
+        if (outlierCb) {
+            outlierCb.addEventListener('change', async (e) => {
+                const checked = outlierCb.checked;
+                await fetch(`${API_URL}/expense/${exp.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ outlier: checked })
+                });
+                loadExpenses();
+            });
+        }
+        // Attach notes edit event listener
+        const notesCell = tr.querySelector('[data-field="notes"]');
+        if (notesCell) {
+            notesCell.addEventListener('blur', async (e) => {
+                const value = notesCell.textContent;
+                await fetch(`${API_URL}/expense/${exp.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notes: value })
+                });
+                loadExpenses();
+            });
+        }
     });
     // Attach cell click event listeners for inline editing
     setTimeout(() => {
@@ -880,13 +1015,43 @@ function renderFilters(expenses) {
     // Populate dropdowns for category, card, who
     const categories = [...new Set(expenses.map(e => e.category).filter(Boolean))];
     const cards = [...new Set(expenses.map(e => e.card).filter(Boolean))];
-    const whos = [...new Set(expenses.map(e => e.who).filter(Boolean))];
+    // Always show Gautami, Ameya, Other in Who filter, plus any others present
+    const defaultWhos = ['Gautami', 'Ameya', 'Other'];
+    const whos = Array.from(new Set([...defaultWhos, ...expenses.map(e => e.who).filter(Boolean)]));
     const categoryFilter = document.getElementById('filter-category');
     const cardFilter = document.getElementById('filter-card');
     const whoFilter = document.getElementById('filter-who');
     if (categoryFilter) categoryFilter.innerHTML = '<option value="">All</option>' + categories.map(c => `<option value="${c}">${c}</option>`).join('');
     if (cardFilter) cardFilter.innerHTML = '<option value="">All</option>' + cards.map(c => `<option value="${c}">${c}</option>`).join('');
     if (whoFilter) whoFilter.innerHTML = '<option value="">All</option>' + whos.map(w => `<option value="${w}">${w}</option>`).join('');
+
+    // Always attach autofill button listeners after rendering Who filter bar
+    setTimeout(() => {
+        const autofillWhoAllBtn = document.getElementById('autofillWhoAllBtn');
+        if (autofillWhoAllBtn) {
+            autofillWhoAllBtn.onclick = () => {
+                const bar = document.getElementById('filterbar-who');
+                if (bar) {
+                    bar.style.display = 'block';
+                    let existing = bar.querySelector('.autofill-inline-input');
+                    if (existing) existing.remove();
+                    if (typeof showAutofillInput === 'function') showAutofillInput('all');
+                }
+            };
+        }
+        const autofillWhoSelectedBtn = document.getElementById('autofillWhoSelectedBtn');
+        if (autofillWhoSelectedBtn) {
+            autofillWhoSelectedBtn.onclick = () => {
+                const bar = document.getElementById('filterbar-who');
+                if (bar) {
+                    bar.style.display = 'block';
+                    let existing = bar.querySelector('.autofill-inline-input');
+                    if (existing) existing.remove();
+                    if (typeof showAutofillInput === 'function') showAutofillInput('selected');
+                }
+            };
+        }
+    }, 0);
 }
 
 
@@ -907,6 +1072,7 @@ function applyColumnFilters() {
     const catVal = document.getElementById('filter-category').value;
     const cardVal = document.getElementById('filter-card').value;
     const whoVal = document.getElementById('filter-who').value;
+    const needVal = document.getElementById('filter-needcat')?.value;
     // Notes
     const notesVal = document.getElementById('filter-notes').value.toLowerCase();
     filteredExpenses = allExpenses.filter(e => {
@@ -918,14 +1084,15 @@ function applyColumnFilters() {
         let amtOk = true;
         if (amtMin !== "" && e.amount !== undefined) amtOk = Number(e.amount) >= Number(amtMin);
         if (amtMax !== "" && e.amount !== undefined) amtOk = amtOk && Number(e.amount) <= Number(amtMax);
-        // Category, Card, Who
+        // Category, Card, Who, Need
         let catOk = !catVal || (e.category === catVal);
         let cardOk = !cardVal || (e.card === cardVal);
         let whoOk = !whoVal || (e.who === whoVal);
+        let needOk = !needVal || (e.need_category === needVal);
         // Description, Notes
         let descOk = !descVal || (e.description && e.description.toLowerCase().includes(descVal));
         let notesOk = !notesVal || (e.notes && e.notes.toLowerCase().includes(notesVal));
-        return dateOk && amtOk && catOk && cardOk && whoOk && descOk && notesOk;
+        return dateOk && amtOk && catOk && cardOk && whoOk && needOk && descOk && notesOk;
     });
     // Sorting
     if (sortState.column) {

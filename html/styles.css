@@ -1,3 +1,21 @@
+/* Pastel Red Button */
+.btn-pastel-red {
+    background: var(--pastel-red, #ffb3b3);
+    color: #a94442;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Montserrat', 'Segoe UI', sans-serif;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    transition: background 0.2s, color 0.2s;
+    padding: 0.5em 1.2em;
+    cursor: pointer;
+}
+.btn-pastel-red:hover, .btn-pastel-red:focus {
+    background: #ff8c8c;
+    color: #fff;
+    outline: none;
+}
 /* Quick Filter Chips */
 .quick-filter-chips {
   display: flex;
@@ -86,11 +104,11 @@
 
 /* Sticky Table Header */
 #expensesTable thead th {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: rgba(255, 229, 217, 0.95);
-  backdrop-filter: blur(2px);
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  background: rgba(255, 229, 217, 0.95) !important;
+  backdrop-filter: blur(2px) !important;
 }
 
 /* Category Badge in Table */
@@ -347,6 +365,7 @@ body {
   padding: 0;
   width: 100vw;
   box-sizing: border-box;
+  overflow-y: visible !important;
 }
 
 .glass-block {
@@ -355,6 +374,7 @@ body {
   box-shadow: 0 8px 32px 0 rgba(244, 172, 183, 0.15);
   border: 1px solid var(--mountbatten-pink);
   overflow-x: unset;
+  overflow-y: visible !important; /* Ensure sticky header works */
   padding-left: 18px;
   padding-right: 18px;
   width: 100%;
@@ -402,7 +422,6 @@ button {
 
 
 th {
-  background: transparent !important;
   font-size: 1.04rem !important;
   font-weight: 800 !important;
   color: #2d2d2d !important;
@@ -412,8 +431,6 @@ th {
   padding-bottom: 0.55em !important;
   border-bottom: 2px solid var(--mint) !important;
   font-family: 'Montserrat', 'Segoe UI', sans-serif !important;
-  background: rgba(255, 229, 217, 0.18) !important;
-  z-index: 1;
 }
 .filter-arrow svg {
   font-family: inherit !important;
@@ -425,7 +442,7 @@ td {
 
 table {
   border-radius: 1rem;
-  overflow: hidden;
+  /* Removed overflow: hidden to allow sticky header */
   width: 100%;
   min-width: 900px;
   table-layout: auto;
@@ -441,11 +458,13 @@ table {
 .table-container {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
   margin: 0;
   box-sizing: border-box;
   padding-left: 18px;
   padding-right: 18px;
+  overflow-x: auto; /* Enable horizontal scrolling only */
+  /* Table is no longer vertically scrollable; only side scroll enabled */
+  overflow-y: visible !important; /* Ensure vertical overflow does not block sticky header */
 }
 th, td {
   white-space: nowrap;

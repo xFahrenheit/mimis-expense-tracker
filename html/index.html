@@ -27,10 +27,6 @@
                 <button class="tab-btn px-6 py-2 text-lg font-semibold text-mint focus:outline-none" data-tab="income">Income Distribution</button>
             </div>
             <div id="tab-expenses" class="tab-content">
-                <!-- Delete All Expenses Button -->
-                <div class="flex justify-end mb-2">
-                    <button id="deleteAllBtn" class="delete-expenses-btn">Delete All Expenses</button>
-                </div>
                 <!-- Upload Form -->
                 <form id="uploadForm" class="glass-block p-4 flex flex-col md:flex-row items-center gap-4 mb-8" enctype="multipart/form-data">
                     <div class="flex flex-row items-center gap-2 w-full">
@@ -45,6 +41,7 @@
                         <input type="text" id="customCardInput" name="custom_card" class="rounded px-2 py-2" placeholder="Enter card name" style="display:none; min-width:120px;" />
                         <button type="submit" class="btn-pastel">Upload Statement</button>
                         <button id="recategorizeBtn" type="button" class="btn-pastel ml-2">Re-categorize All</button>
+                        <button id="deleteAllBtn" class="btn-pastel-red ml-2" style="margin-left:auto;">Delete All Expenses</button>
 <script>
 // Show/hide custom card input based on dropdown
 document.addEventListener('DOMContentLoaded', function() {
@@ -77,10 +74,26 @@ document.addEventListener('DOMContentLoaded', function() {
                             <span id="avgPerDay">$0/day</span> &middot; <span id="avgPerMonth">$0/mo</span>
                         </div>
                     </div>
-                    <!-- 12mo trend sparkline removed -->
+                    <div class="flex flex-row items-center md:items-end gap-4 ml-auto">
+                        <div class="flex flex-col items-center md:items-start">
+                            <div class="total-spending-label">Gautami's Spending</div>
+                            <div id="gautamiSpendingValue" class="total-spending-value">$0</div>
+                        </div>
+                        <div class="flex flex-col items-center md:items-start">
+                            <div class="total-spending-label">Ameya's Spending</div>
+                            <div id="ameyaSpendingValue" class="total-spending-value">$0</div>
+                        </div>
+                    </div>
                 </div>
                 <!-- Quick Filter Chips -->
                 <div id="quickFilterChips" class="quick-filter-chips flex flex-wrap gap-2 mb-2"></div>
+                <div id="filterbar-needcat" class="filterbar" style="display:none">
+                    <select id="filter-needcat" class="w-24 mt-1 px-1 py-0.5 rounded text-xs">
+                        <option value="">All</option>
+                        <option value="Need">Need</option>
+                        <option value="Luxury">Luxury</option>
+                    </select>
+                </div>
 
 
                 <!-- Expenses Table -->
@@ -135,8 +148,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <option value="">All</option>
                                         </select>
                                         <div class="flex flex-col gap-1 mt-2">
-                                            <button id="autofillWhoAllBtn" class="bg-purple-500 text-white text-xs px-2 py-1 rounded mb-1" type="button">Autofill All</button>
-                                            <button id="autofillWhoSelectedBtn" class="bg-indigo-500 text-white text-xs px-2 py-1 rounded" type="button">Fill Selected</button>
+                                            <button id="autofillWhoAllBtn" class="btn-pastel text-xs px-2 py-1 rounded mb-1" type="button">Autofill All</button>
+                                            <button id="autofillWhoSelectedBtn" class="btn-pastel text-xs px-2 py-1 rounded" type="button">Fill Selected</button>
                                         </div>
                                     </div>
                                 </th>
