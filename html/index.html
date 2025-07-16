@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script>
+      window.ChartDataLabels = window.ChartDataLabels || ChartDataLabels;
+    </script>
+    <script src="utils.js" defer></script>
+</head>
+<body class="bg-gray-50 min-h-screen" style="font-family: 'Montserrat', 'Segoe UI', sans-serif;">
+    <div class="w-full p-0 m-0" style="padding-left:18px; padding-right:18px;">
+        <h1 class="text-4xl font-extrabold mb-8 text-center bg-gradient-to-r from-purple-400 via-pink-500 to-indigo-500 bg-clip-text text-transparent drop-shadow-lg">Expense Tracker</h1>
+        <!-- Tabbed UI -->
+        <div class="glass-block p-2 mb-8">
+            <div class="flex" style="border-bottom: 3px solid var(--mint); margin-bottom: 1rem;">
+                <button class="tab-btn px-6 py-2 text-lg font-semibold text-mint focus:outline-none" data-tab="expenses">Expenses</button>
+                <button class="tab-btn px-6 py-2 text-lg font-semibold text-mint focus:outline-none" data-tab="analytics">Spending Analytics</button>
+                <button class="tab-btn px-6 py-2 text-lg font-semibold text-mint focus:outline-none" data-tab="income">Income Distribution</button>
+            </div>
+            <div id="tab-expenses" class="tab-content">
+                <!-- Delete All Expenses Button -->
+                <div class="flex justify-end mb-2">
+                    <button id="deleteAllBtn" class="delete-expenses-btn">Delete All Expenses</button>
+                </div>
+                <!-- Upload Form -->
+                <form id="uploadForm" class="glass-block p-4 flex flex-col md:flex-row items-center gap-4 mb-8" enctype="multipart/form-data">
+                    <div class="flex flex-row items-center gap-2 w-full">
+                        <input type="file" name="statement" id="statement" accept=".csv,.pdf" class="rounded px-2 py-2 w-48" required />
+                        <select id="cardSelect" name="card" class="rounded px-2 py-2">
+                            <option value="">Select Card</option>
+                            <option value="chase sapphire">Chase Sapphire</option>
+                            <option value="venture x">Venture X</option>
+                            <option value="discover">Discover</option>
+                            <option value="other">Other (type below)</option>
+                        </select>
+                        <input type="text" id="customCardInput" name="custom_card" class="rounded px-2 py-2" placeholder="Enter card name" style="display:none; min-width:120px;" />
+                        <button type="submit" class="btn-pastel">Upload Statement</button>
+                        <button id="recategorizeBtn" type="button" class="btn-pastel ml-2">Re-categorize All</button>
+<script>
+// Show/hide custom card input based on dropdown
+document.addEventListener('DOMContentLoaded', function() {
+  const cardSelect = document.getElementById('cardSelect');
+  const customInput = document.getElementById('customCardInput');
+  if (cardSelect && customInput) {
+    cardSelect.addEventListener('change', function() {
+      if (cardSelect.value === 'other') {
+        customInput.style.display = '';
+        customInput.required = true;
+      } else {
+        customInput.style.display = 'none';
+        customInput.required = false;
+      }
+    });
+  }
+});
+</script>
+                    </div>
+                </form>
+
+                <!-- Filters & Actions -->
+
+                <!-- Total Spending Highlight Block (moved above table, compact) -->
+                <div id="totalSpendingBlock" class="total-spending-block glass-block mb-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div class="flex flex-col items-center md:items-start">
+                        <div class="total-spending-label">Total Spending</div>
+                        <div id="totalSpendingValue" class="total-spending-value">$0</div>
+                        <div class="total-spending-avg text-xs mt-1 text-gray-600">
+                            <span id="avgPerDay">$0/day</span> &middot; <span id="avgPerMonth">$0/mo</span>
+                        </div>
+                    </div>
+                    <!-- 12mo trend sparkline removed -->
+                </div>
+                <!-- Quick Filter Chips -->
+                <div id="quickFilterChips" class="quick-filter-chips flex flex-wrap gap-2 mb-2"></div>
+
+
+                <!-- Expenses Table -->
+                <div class="glass-block mb-8 p-4 table-container">
+                    <div class="flex justify-between items-center mb-2">
+                        <div></div>
+                        <button id="exportCsvBtn" class="btn-pastel text-xs px-3 py-1">Export CSV</button>
+                    </div>
+                    <table id="expensesTable">
+                        <thead>
+                            <tr class="text-purple-200">
+                                <th class="py-2 px-3 w-10"></th>
+                                <th class="py-2 px-3 w-32 cursor-pointer" id="th-date"><div class="flex items-center gap-1"><span>Date</span><span id="sort-date" class="ml-1 filter-arrow" data-filter="date"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                                    <div id="filterbar-date" class="filterbar" style="display:none">
+                                        <input type="date" id="filter-date-from" class="w-20 mt-1 px-1 py-0.5 rounded text-xs" placeholder="From" />
+                                        <input type="date" id="filter-date-to" class="w-20 mt-1 px-1 py-0.5 rounded text-xs" placeholder="To" />
+                                    </div>
+                                </th>
+                                <th class="py-2 px-3 w-56 cursor-pointer" id="th-description"><div class="flex items-center gap-1"><span>Description</span><span id="sort-description" class="ml-1 filter-arrow" data-filter="description"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                                    <div id="filterbar-description" class="filterbar" style="display:none">
+                                        <input type="text" id="filter-description" class="w-28 mt-1 px-1 py-0.5 rounded text-xs" placeholder="Filter" />
+                                    </div>
+                                </th>
+                                <th class="py-2 px-3 w-24 cursor-pointer" id="th-amount"><div class="flex items-center gap-1"><span>Amount</span><span id="sort-amount" class="ml-1 filter-arrow" data-filter="amount"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                                    <div id="filterbar-amount" class="filterbar" style="display:none">
+                                        <input type="number" id="filter-amount-min" class="w-16 mt-1 px-1 py-0.5 rounded text-xs" placeholder="Min" />
+                                        <input type="number" id="filter-amount-max" class="w-16 mt-1 px-1 py-0.5 rounded text-xs" placeholder="Max" />
+                                    </div>
+                                </th>
+                                <th class="py-2 px-3 w-36" id="th-category"><div class="flex items-center gap-1"><span>Category</span><span class="ml-1 filter-arrow" data-filter="category"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                                    <div id="filterbar-category" class="filterbar" style="display:none">
+                                        <select id="filter-category" class="w-20 mt-1 px-1 py-0.5 rounded text-xs">
+                                            <option value="">All</option>
+                                        </select>
+                                    </div>
+                                </th>
+                                <th class="py-2 px-3 w-36" id="th-needcat"><div class="flex items-center gap-1"><span>Need Category</span></div></th>
+                                <th class="py-2 px-3 w-28" id="th-card"><div class="flex items-center gap-1"><span>Card</span><span class="ml-1 filter-arrow" data-filter="card"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                                    <div id="filterbar-card" class="filterbar" style="display:none">
+                                        <select id="filter-card" class="w-20 mt-1 px-1 py-0.5 rounded text-xs">
+                                            <option value="">All</option>
+                                        </select>
+                                    </div>
+                                </th>
+                                <th class="py-2 px-3 w-28" id="th-who">
+                                    <div class="flex items-center gap-1 justify-between">
+                                        <span>Spender</span>
+                                        <span class="ml-1 filter-arrow" data-filter="who"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                                    </div>
+                                    <div id="filterbar-who" class="filterbar" style="display:none">
+                                        <select id="filter-who" class="w-20 mt-1 px-1 py-0.5 rounded text-xs">
+                                            <option value="">All</option>
+                                        </select>
+                                        <div class="flex flex-col gap-1 mt-2">
+                                            <button id="autofillWhoAllBtn" class="bg-purple-500 text-white text-xs px-2 py-1 rounded mb-1" type="button">Autofill All</button>
+                                            <button id="autofillWhoSelectedBtn" class="bg-indigo-500 text-white text-xs px-2 py-1 rounded" type="button">Fill Selected</button>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="py-2 px-3 w-16 text-center">Split</th>
+                                <th class="py-2 px-3 w-16 text-center">Outlier</th>
+                                <th class="py-2 px-3 w-40" id="th-notes"><div class="flex items-center gap-1"><span>Notes</span><span class="ml-1 filter-arrow" data-filter="notes"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                                    <div id="filterbar-notes" class="filterbar" style="display:none">
+                                        <input type="text" id="filter-notes" class="w-24 mt-1 px-1 py-0.5 rounded text-xs" placeholder="Filter" />
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="expensesTableBody">
+                            <!-- Expenses will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Recent Large Expenses Block -->
+                <div id="recentLargeBlock" class="recent-large-block glass-block mt-2 mb-6 flex flex-col items-start"></div>
+            </div>
+            <div id="tab-analytics" class="tab-content" style="display:none;">
+                <div class="flex items-center gap-4 mb-4">
+                    <label for="analyticsToggle" class="text-sm font-semibold text-purple-200">View:</label>
+                    <select id="analyticsToggle" class="rounded px-2 py-1 text-sm bg-white text-gray-900">
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+                    <button id="darkModeToggle" class="ml-auto btn-pastel text-xs px-3 py-1">🌙 Dark Mode</button>
+                </div>
+                <!-- Text to SQL UI -->
+                <div class="glass-block p-4 mb-6">
+                    <h2 class="text-lg font-semibold mb-2 text-purple-200">Ask a Question (Text to SQL)</h2>
+                    <form id="textToSqlForm" class="flex flex-col md:flex-row gap-2 items-center">
+                        <input id="textToSqlInput" type="text" class="rounded px-3 py-2 border w-full md:w-2/3 text-gray-900" placeholder="e.g. Show me total groceries spending by month" />
+                        <button type="submit" class="analyze-btn">Analyze</button>
+                    </form>
+                    <div id="textToSqlResult" class="mt-4"></div>
+                </div>
+                <!-- Default Analytics Charts -->
+                <div class="charts-row mb-8">
+                    <div class="chart-bg p-6">
+                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Spending by Category</h2>
+                        <canvas id="categoryPieChart" height="320" width="320"></canvas>
+                    </div>
+                    <div class="chart-bg p-6">
+                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Needs vs Luxury</h2>
+                        <canvas id="needLuxuryPieChart" height="320" width="320"></canvas>
+                    </div>
+                    <div class="chart-bg p-6">
+                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Gautami vs Ameya</h2>
+                        <canvas id="spenderPieChart" height="320" width="320"></canvas>
+                    </div>
+                    <div class="chart-bg p-6">
+                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Monthly Spending (Bar)</h2>
+                        <canvas id="monthlyBarChart" height="320" width="320"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="tab-income" class="tab-content" style="display:none;">
+                <div class="glass-block p-4 mb-8">
+                    <h2 class="text-lg font-semibold mb-2 text-purple-200">Income Distribution</h2>
+                    <div id="incomeDistributionContent">Coming soon...</div>
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+</body>
+</html>
