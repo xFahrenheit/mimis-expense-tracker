@@ -1,4 +1,3 @@
-
 import sqlite3
 from contextlib import contextmanager
 try:
@@ -50,4 +49,5 @@ def init_db():
                 need_category TEXT
             )
         ''')
+        conn.commit()
         conn.commit()
