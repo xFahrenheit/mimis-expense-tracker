@@ -49,5 +49,11 @@ def init_db():
                 need_category TEXT
             )
         ''')
-        conn.commit()
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS custom_categories (
+                name TEXT PRIMARY KEY,
+                icon TEXT DEFAULT '🏷️',
+                color TEXT DEFAULT '#818cf8'
+            )
+        ''')
         conn.commit()

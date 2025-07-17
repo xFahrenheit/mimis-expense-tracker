@@ -28,6 +28,19 @@ export async function deleteExpense(id) {
     await fetch(`${API_URL}/expense/${id}`, { method: 'DELETE' });
 }
 
+// Bulk delete expenses
+export async function bulkDeleteExpenses(ids) {
+    const res = await fetch(`${API_URL}/expenses/bulk_delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+    });
+    if (!res.ok) {
+        throw new Error(`Failed to delete expenses: ${res.statusText}`);
+    }
+    return res.json();
+}
+
 // Update expense
 export async function updateExpense(id, data) {
     await fetch(`${API_URL}/expense/${id}`, {
@@ -68,6 +81,32 @@ export async function recategorizeAll() {
         headers: { 'Content-Type': 'application/json' }
     });
     return res;
+}
+
+// Get all categories and their metadata
+export async function getCategories() {
+    const res = await fetch(`${API_URL}/categories`);
+    return res.json();
+}
+
+// Add a new category
+export async function addCategory(name, icon = '🏷️', color = '#818cf8') {
+    const res = await fetch(`${API_URL}/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, icon, color })
+    });
+    return res.json();
+}
+
+// Update an existing category
+export async function updateCategory(name, icon, color) {
+    const res = await fetch(`${API_URL}/categories/${encodeURIComponent(name)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ icon, color })
+    });
+    return res.json();
 }
 
 // Text to SQL query

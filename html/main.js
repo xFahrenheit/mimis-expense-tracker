@@ -2,7 +2,7 @@
 import { setAllExpenses, setFilteredExpenses } from './config.js';
 import { loadExpenses, loadStatements, uploadFile, deleteAllExpenses, recategorizeAll, textToSqlQuery } from './api.js';
 import { renderCharts } from './charts.js';
-import { addCategoryUI } from './categories.js';
+import { initializeCategories } from './categories.js';
 import { applyColumnFilters, attachFilterAndSortListeners } from './filters.js';
 import { exportFilteredToCSV, setupDarkModeToggle, setupAnalyticsToggle, setupNotesArea } from './helpers.js';
 import { renderExpenses, renderFilters, renderStatements, renderQuickFilterChips, renderRecentLargeExpenses, renderAverages } from './render.js';
@@ -18,6 +18,9 @@ async function loadExpensesMain() {
     const expenses = await loadExpenses();
     setAllExpenses(expenses);
     setFilteredExpenses(expenses);
+    
+    // Apply initial sorting (by date, newest first)
+    applyColumnFilters();
     
     // Render components
     renderExpenses(expenses);
@@ -41,20 +44,65 @@ async function loadStatementsMain() {
 
 // Update spending summary blocks
 function updateSpendingBlocks(expenses) {
+    console.log('=== updateSpendingBlocks Debug ===');
+    console.log('Total expenses:', expenses.length);
+    
+    if (expenses.length > 0) {
+        console.log('Sample expense object:', expenses[0]);
+        console.log('First expense who field:', JSON.stringify(expenses[0].who));
+    }
+    
     const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    console.log('Calculated total:', total);
     let gautami = 0, ameya = 0, splitTotal = 0;
     
+    // Debug: Check all unique who values
+    const whoValues = expenses.map(e => e.who).filter(w => w !== null && w !== undefined);
+    const uniqueWhoValues = [...new Set(whoValues)];
+    console.log('All who values (first 10):', whoValues.slice(0, 10));
+    console.log('Unique who values:', uniqueWhoValues);
+    console.log('Total non-null who values:', whoValues.length);
+    
+    let processedCount = 0;
     for (const e of expenses) {
+        if (processedCount < 3) { // Only log first 3 for debugging
+            console.log(`Expense ${processedCount + 1}:`, {
+                description: e.description,
+                who: JSON.stringify(e.who),
+                amount: e.amount,
+                split_cost: e.split_cost
+            });
+        }
+        
         if (e.split_cost) {
             // Split cost: each person gets half
-            gautami += Number(e.amount || 0) / 2;
-            ameya += Number(e.amount || 0) / 2;
+            const splitAmount = Number(e.amount || 0) / 2;
+            gautami += splitAmount;
+            ameya += splitAmount;
             splitTotal += Number(e.amount || 0);
+            if (processedCount < 3) console.log(`Split expense - Added ${splitAmount} to each person`);
         } else {
-            if (e.who === 'Gautami') gautami += Number(e.amount || 0);
-            if (e.who === 'Ameya') ameya += Number(e.amount || 0);
+            const who = (e.who || '').toString().trim();
+            const amount = Number(e.amount || 0);
+            
+            if (who.toLowerCase() === 'gautami') {
+                gautami += amount;
+                if (processedCount < 3) console.log(`Added ${amount} to Gautami (original: "${e.who}")`);
+            } else if (who.toLowerCase() === 'ameya') {
+                ameya += amount;
+                if (processedCount < 3) console.log(`Added ${amount} to Ameya (original: "${e.who}")`);
+            } else {
+                if (processedCount < 3) console.log(`Unmatched who value: "${who}" (original: "${e.who}")`);
+            }
         }
+        processedCount++;
     }
+    
+    console.log('=== Final Calculations ===');
+    console.log('Gautami total:', gautami);
+    console.log('Ameya total:', ameya);
+    console.log('Split total:', splitTotal);
+    console.log('Grand total:', total);
     
     const days = new Set(expenses.map(e => e.date)).size || 1;
     const months = new Set(expenses.map(e => (e.date||'').slice(0,7))).size || 1;
@@ -85,8 +133,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     setupAnalyticsToggle();
     setupNotesArea();
     
-    // Setup category management
-    addCategoryUI();
+    // Initialize categories (loads categories from backend)
+    await initializeCategories();
     
     // Attach event listeners
     attachDeleteAllBtnListener();
@@ -98,10 +146,30 @@ window.addEventListener('DOMContentLoaded', async () => {
         exportBtn.onclick = () => exportFilteredToCSV(window.filteredExpenses || []);
     }
     
+    // Setup manage categories button
+    const manageCategoriesBtn = document.getElementById('manageCategoriesBtn');
+    if (manageCategoriesBtn) {
+        manageCategoriesBtn.addEventListener('click', async () => {
+            const { showCategoryModal } = await import('./categories.js');
+            showCategoryModal();
+        });
+    }
+    
     // Load initial data
     await loadStatementsMain();
     await loadExpensesMain();
 });
+
+// Make functions available globally for HTML onclick handlers
+window.editCategoryEmoji = async (categoryName, currentEmoji) => {
+    const { editCategoryEmoji } = await import('./categories.js');
+    return editCategoryEmoji(categoryName, currentEmoji);
+};
+
+window.closeCategoryModal = async () => {
+    const { closeCategoryModal } = await import('./categories.js');
+    return closeCategoryModal();
+};
 
 // Expose functions globally for cross-module communication
 window.loadExpenses = loadExpensesMain;

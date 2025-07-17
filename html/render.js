@@ -1,6 +1,6 @@
 import { CATEGORY_META, CATEGORY_LIST, allExpenses } from './config.js';
-import { getCategoryMeta } from './categories.js';
-import { addExpense, updateExpense, deleteExpense, reimportStatement } from './api.js';
+import { getCategoryMeta, createCategoryDropdown, handleCategorySelection } from './categories.js';
+import { addExpense, updateExpense, deleteExpense, reimportStatement, bulkDeleteExpenses } from './api.js';
 
 // Render expense table
 export function renderExpenses(expenses) {
@@ -241,7 +241,7 @@ function setupTableHeader(tbody) {
         // Insert autofill header cell as first column
         const th = document.createElement('th');
         th.className = 'py-2 px-3 text-center';
-        th.innerHTML = '<input type="checkbox" class="autofill-header-checkbox" title="Select all rows for autofill" />';
+        th.innerHTML = '<input type="checkbox" class="autofill-header-checkbox" title="Select all rows" />';
         headerRow.insertBefore(th, headerRow.firstChild);
     }
     
@@ -252,6 +252,7 @@ function setupTableHeader(tbody) {
             headerCb.onclick = () => {
                 const cbs = tbody.querySelectorAll('.autofill-row-checkbox');
                 cbs.forEach(cb => { cb.checked = headerCb.checked; });
+                updateFloatingButtonVisibility(); // Update floating button after select all
             };
         }
     }, 0);
@@ -266,9 +267,7 @@ function addManualEntryRow(tbody) {
         <td class="py-2 px-3"><input type="text" class="add-description w-full px-1 py-1 rounded text-xs" placeholder="Description" /></td>
         <td class="py-2 px-3"><input type="number" class="add-amount w-full px-1 py-1 rounded text-xs" placeholder="$" step="0.01" /></td>
         <td class="py-2 px-3" style="text-align:center;">
-            <select class="add-category w-full px-1 py-1 rounded text-xs">
-                ${CATEGORY_LIST.map(c => `<option value="${c}">${CATEGORY_META[c].icon} ${c.charAt(0).toUpperCase()+c.slice(1)}</option>`).join('')}
-            </select>
+            <div class="add-category-container"></div>
         </td>
         <td class="py-2 px-3" style="text-align:center;">
             <select class="add-needcat w-full px-1 py-1 rounded text-xs">
@@ -328,6 +327,19 @@ function renderExpenseRow(tbody, exp) {
 }
 
 function setupManualEntryListeners(addTr) {
+    // Setup category dropdown with "Add Category" option
+    const categoryContainer = addTr.querySelector('.add-category-container');
+    const categorySelect = createCategoryDropdown();
+    categorySelect.className = 'add-category w-full px-1 py-1 rounded text-xs';
+    categoryContainer.appendChild(categorySelect);
+    
+    // Handle category selection
+    categorySelect.addEventListener('change', async () => {
+        await handleCategorySelection(categorySelect, (selectedCategory) => {
+            // Category was selected or added, dropdown value is already updated
+        });
+    });
+    
     // Spender custom input logic
     const whoSelect = addTr.querySelector('.add-who');
     const whoCustom = addTr.querySelector('.add-who-custom');
@@ -501,13 +513,23 @@ function setupInlineEditing(tbody, expenses) {
             let inputHtml = '';
             
             if (field === 'category') {
-                const { CATEGORY_LIST, CATEGORY_META } = await import('./config.js');
-                let cat = (exp.category || '').toLowerCase().replace(/[^a-z]/g, '');
-                let catOptions = CATEGORY_LIST.map(c => {
-                    const m = CATEGORY_META[c];
-                    return `<option value="${c}" ${c===cat?'selected':''} data-icon="${m.icon}" data-color="${m.color}">${m.icon} ${c.charAt(0).toUpperCase()+c.slice(1)}</option>`;
-                }).join('');
-                inputHtml = `<select class="edit-inline-category">${catOptions}</select>`;
+                // Create category dropdown with "Add Category" option
+                const categorySelect = createCategoryDropdown(exp.category);
+                categorySelect.className = 'edit-inline-category w-full px-1 py-1 rounded text-xs';
+                
+                // Setup the select element
+                cell.innerHTML = '';
+                cell.appendChild(categorySelect);
+                
+                // Handle selection change
+                categorySelect.addEventListener('change', async () => {
+                    await handleCategorySelection(categorySelect, (selectedCategory) => {
+                        saveInlineEdit(cell, exp, field, selectedCategory, true);
+                    });
+                });
+                
+                categorySelect.focus();
+                return; // Skip the rest of the editing setup
             } else if (field === 'need_category') {
                 // Toggle between Need and Luxury on click
                 let currentValue = exp.need_category || 'Need';
@@ -632,6 +654,92 @@ function setupAutofillButtons() {
                 showAutofillInput('selected');
             }
         };
+    }
+    
+    // Floating bulk delete button
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    if (bulkDeleteBtn) {
+        bulkDeleteBtn.onclick = async () => {
+            await handleBulkDelete(bulkDeleteBtn);
+        };
+    }
+    
+    // Setup checkbox listeners for floating button visibility
+    setupFloatingButtonVisibility();
+}
+
+// Shared bulk delete handler
+async function handleBulkDelete(button) {
+    const selectedIds = getSelectedExpenseIds();
+    if (selectedIds.length === 0) {
+        alert('Please select at least one expense to delete.');
+        return;
+    }
+    
+    const confirmed = confirm(`Are you sure you want to delete ${selectedIds.length} selected expense(s)? This action cannot be undone.`);
+    if (!confirmed) return;
+    
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Deleting...';
+    
+    try {
+        console.log('Deleting expenses with IDs:', selectedIds);
+        await bulkDeleteExpenses(selectedIds);
+        console.log('Bulk delete completed, reloading expenses...');
+        
+        // Clear all checkboxes immediately to avoid stale state
+        const checkboxes = document.querySelectorAll('.autofill-row-checkbox, .autofill-header-checkbox');
+        checkboxes.forEach(cb => { cb.checked = false; });
+        
+        // Hide floating button immediately
+        updateFloatingButtonVisibility();
+        
+        // Reload expenses and wait for completion
+        if (window.loadExpenses) {
+            await window.loadExpenses();
+            console.log('Expenses reloaded successfully');
+        }
+        
+        alert(`Successfully deleted ${selectedIds.length} expense(s).`);
+    } catch (error) {
+        console.error('Bulk delete failed:', error);
+        alert('Failed to delete some expenses. Please try again.');
+    } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+    }
+}
+
+// Setup floating button visibility management
+function setupFloatingButtonVisibility() {
+    // Set up event listeners for checkbox changes
+    document.addEventListener('change', function(event) {
+        if (event.target.classList.contains('autofill-row-checkbox') || 
+            event.target.classList.contains('autofill-header-checkbox')) {
+            updateFloatingButtonVisibility();
+        }
+    });
+    
+    // Initial visibility check
+    updateFloatingButtonVisibility();
+}
+
+// Update floating button visibility based on selected checkboxes
+function updateFloatingButtonVisibility() {
+    const selectedIds = getSelectedExpenseIds();
+    const floatingBtn = document.getElementById('floatingDeleteBtn');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (!floatingBtn) return;
+    
+    if (selectedIds.length > 0) {
+        floatingBtn.style.display = 'block';
+        if (selectedCount) {
+            selectedCount.textContent = selectedIds.length;
+        }
+    } else {
+        floatingBtn.style.display = 'none';
     }
 }
 

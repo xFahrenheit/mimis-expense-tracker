@@ -71,6 +71,15 @@ export function setupUploadForm() {
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(uploadForm);
+        
+        // Extract bank type from selected card option
+        const cardSelect = document.getElementById('cardSelect');
+        if (cardSelect && cardSelect.selectedOptions.length > 0) {
+            const selectedOption = cardSelect.selectedOptions[0];
+            const bankType = selectedOption.getAttribute('data-bank') || 'generic';
+            formData.set('bank_type', bankType);
+        }
+        
         const res = await uploadFile(formData);
         
         if (res.ok) {

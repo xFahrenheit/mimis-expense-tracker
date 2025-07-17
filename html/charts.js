@@ -1,4 +1,8 @@
-import { genColors } from './helpers.js';
+import { genColors, getCSSColors, getPieChartOptions, getBarChartOptions } from './helpers.js';
+import { CATEGORY_META } from './config.js';
+
+// Global chart instances for cleanup
+const chartInstances = {};
 
 // Render all charts
 export function renderCharts(expenses) {
@@ -7,21 +11,190 @@ export function renderCharts(expenses) {
         Chart.register(window.ChartDataLabels);
     }
 
-    // Monthly/Yearly Toggle
-    const toggle = document.getElementById('analyticsToggle');
-    const mode = toggle && toggle.value === 'yearly' ? 'yearly' : 'monthly';
+    // Filter expenses based on date range
+    const filteredExpenses = filterExpensesByDateRange(expenses);
     
-    // Monthly/Yearly Bar Chart
-    renderTimeBasedChart(expenses, mode);
+    // Update summary cards
+    updateAnalyticsSummary(filteredExpenses, expenses);
     
-    // Category Pie Chart
-    renderCategoryChart(expenses);
+    // Render enhanced charts
+    renderTrendChart(filteredExpenses);
+    renderCategoryChart(filteredExpenses);
+    renderNeedLuxuryChart(filteredExpenses);
+    renderSpenderChart(filteredExpenses);
+    renderDayOfWeekChart(filteredExpenses);
+    renderMerchantChart(filteredExpenses);
     
-    // Needs vs Luxury Pie Chart
-    renderNeedLuxuryChart(expenses);
+    // Setup chart controls
+    setupChartControls(filteredExpenses);
+}
+
+// Filter expenses by selected date range
+function filterExpensesByDateRange(expenses) {
+    const dateRangeSelect = document.getElementById('dateRangeSelect');
+    if (!dateRangeSelect) return expenses;
     
-    // Spender Pie Chart
-    renderSpenderChart(expenses);
+    const range = dateRangeSelect.value;
+    const now = new Date();
+    let startDate, endDate;
+    
+    switch (range) {
+        case 'last30':
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+        case 'last90':
+            startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            break;
+        case 'thisMonth':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+        case 'lastMonth':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+            break;
+        case 'thisYear':
+            startDate = new Date(now.getFullYear(), 0, 1);
+            break;
+        case 'custom':
+            const startInput = document.getElementById('startDate');
+            const endInput = document.getElementById('endDate');
+            if (startInput?.value) startDate = new Date(startInput.value);
+            if (endInput?.value) endDate = new Date(endInput.value);
+            break;
+        default:
+            return expenses; // 'all' or unrecognized
+    }
+    
+    return expenses.filter(expense => {
+        if (!expense.date) return false;
+        const expenseDate = new Date(expense.date);
+        const afterStart = !startDate || expenseDate >= startDate;
+        const beforeEnd = !endDate || expenseDate <= endDate;
+        return afterStart && beforeEnd;
+    });
+}
+
+// Update analytics summary cards
+function updateAnalyticsSummary(currentExpenses, allExpenses) {
+    const total = currentExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const transactionCount = currentExpenses.length;
+    const avgDaily = currentExpenses.length > 0 ? total / getDaysInRange(currentExpenses) : 0;
+    
+    // Calculate top category
+    const categoryTotals = {};
+    currentExpenses.forEach(e => {
+        const cat = e.category || 'Unknown';
+        categoryTotals[cat] = (categoryTotals[cat] || 0) + Number(e.amount || 0);
+    });
+    
+    const topCategory = Object.keys(categoryTotals).reduce((a, b) => 
+        categoryTotals[a] > categoryTotals[b] ? a : b, 'None');
+    
+    // Update DOM elements
+    updateElement('analyticsTotalSpending', `$${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`);
+    updateElement('analyticsAvgDaily', `$${avgDaily.toLocaleString(undefined, {minimumFractionDigits: 2})}`);
+    updateElement('analyticsTopCategory', topCategory);
+    updateElement('analyticsTopCategoryAmount', `$${(categoryTotals[topCategory] || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`);
+    updateElement('analyticsTransactionCount', transactionCount.toString());
+    
+    // Calculate changes (simple placeholder - could be enhanced with historical comparison)
+    updateElement('analyticsSpendingChange', '--', 'neutral');
+    updateElement('analyticsDailyChange', '--', 'neutral');
+    updateElement('analyticsTransactionChange', '--', 'neutral');
+}
+
+// Enhanced trend chart with multiple time periods
+function renderTrendChart(expenses) {
+    destroyChart('trendChart');
+    
+    const mode = getActiveTrendMode();
+    const data = aggregateByTimePeriod(expenses, mode);
+    
+    // Sort the data by date keys
+    const sortedEntries = Object.entries(data).sort(([a], [b]) => a.localeCompare(b));
+    const labels = sortedEntries.map(([key]) => key);
+    const values = sortedEntries.map(([, value]) => value);
+    
+    const ctx = document.getElementById('trendChart')?.getContext('2d');
+    if (!ctx) return;
+    
+    chartInstances.trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Spending',
+                data: values,
+                borderColor: '#3da07f', // var(--mint) fallback
+                backgroundColor: 'rgba(61, 160, 127, 0.2)', // var(--mint) with transparency
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#3da07f',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 6,
+                pointHoverRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 1.5,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                datalabels: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        callback: function(value, index) {
+                            const label = this.getLabelForValue(value);
+                            // Format the date labels based on mode
+                            if (label.includes('-')) {
+                                const [year, month, day] = label.split('-');
+                                if (day) {
+                                    // Daily format: MM/DD
+                                    return `${month}/${day}`;
+                                } else {
+                                    // Monthly format: MMM YYYY
+                                    const date = new Date(year, month - 1);
+                                    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                                }
+                            }
+                            return label;
+                        },
+                        maxTicksLimit: 8,
+                        font: {
+                            family: "'Montserrat', 'Segoe UI', sans-serif",
+                            size: 11
+                        }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        },
+                        font: {
+                            family: "'Montserrat', 'Segoe UI', sans-serif",
+                            size: 11
+                        }
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    hoverRadius: 8
+                }
+            }
+        }
+    });
 }
 
 // Render time-based (monthly/yearly) bar chart
@@ -53,10 +226,6 @@ function renderTimeBasedChart(expenses, mode) {
             options: getBarChartOptions(),
             plugins: [window.ChartDataLabels]
         });
-        ctxMonthlyBar.canvas.parentNode.style.maxWidth = '1100px';
-        ctxMonthlyBar.canvas.parentNode.style.margin = '0 auto';
-        ctxMonthlyBar.canvas.height = 520;
-        ctxMonthlyBar.canvas.width = 1000;
     }
 }
 
@@ -101,10 +270,6 @@ function renderCategoryChart(expenses) {
             options: getPieChartOptions(),
             plugins: [window.ChartDataLabels]
         });
-        ctxCat.canvas.parentNode.style.maxWidth = '900px';
-        ctxCat.canvas.parentNode.style.margin = '0 auto';
-        ctxCat.canvas.height = 480;
-        ctxCat.canvas.width = 800;
     }
 }
 
@@ -137,10 +302,6 @@ function renderNeedLuxuryChart(expenses) {
             options: getPieChartOptions(),
             plugins: [window.ChartDataLabels]
         });
-        ctxNeed.canvas.parentNode.style.maxWidth = '900px';
-        ctxNeed.canvas.parentNode.style.margin = '0 auto';
-        ctxNeed.canvas.height = 480;
-        ctxNeed.canvas.width = 800;
     }
 }
 
@@ -177,153 +338,219 @@ function renderSpenderChart(expenses) {
             options: getPieChartOptions(),
             plugins: [window.ChartDataLabels]
         });
-        ctxSpender.canvas.parentNode.style.maxWidth = '900px';
-        ctxSpender.canvas.parentNode.style.margin = '0 auto';
-        ctxSpender.canvas.height = 480;
-        ctxSpender.canvas.width = 800;
     }
 }
 
-// Get CSS color values
-function getCSSColors() {
-    return [
-        getComputedStyle(document.documentElement).getPropertyValue('--mint').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--rosy-brown').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--zomp').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--champagne-pink').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--mountbatten-pink').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--pink').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--cherry-blossom-pink').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--platinum').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--davys-gray').trim(),
-        getComputedStyle(document.documentElement).getPropertyValue('--dim-gray').trim()
-    ];
-}
-
-// Common pie chart options
-function getPieChartOptions() {
-    return {
-        responsive: true,
-        plugins: {
-            legend: { display: false },
-            title: { display: false },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        const value = context.parsed;
-                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                        const percent = total ? ((value / total) * 100).toFixed(1) : '0.0';
-                        return `$${value.toLocaleString()} (${percent}%)`;
+// Render day of week spending pattern
+function renderDayOfWeekChart(expenses) {
+    destroyChart('dayOfWeekChart');
+    
+    const dayTotals = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    expenses.forEach(expense => {
+        if (expense.date) {
+            const date = new Date(expense.date);
+            const dayName = dayNames[date.getDay()];
+            dayTotals[dayName] += Number(expense.amount || 0);
+        }
+    });
+    
+    const ctx = document.getElementById('dayOfWeekChart')?.getContext('2d');
+    if (!ctx) return;
+    
+    chartInstances.dayOfWeekChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dayNames,
+            datasets: [{
+                data: Object.values(dayTotals),
+                backgroundColor: getCSSColors(),
+                borderRadius: 8,
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                datalabels: {
+                    anchor: 'end',
+                    align: 'top',
+                    formatter: (value) => value > 0 ? '$' + value.toLocaleString() : '',
+                    font: { size: 10, weight: 'bold' }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
                     }
                 }
-            },
-            datalabels: getPieDatalabelsConfig()
+            }
         },
-        layout: { padding: 24 },
-    };
+        plugins: [window.ChartDataLabels]
+    });
 }
 
-// Common bar chart options
-function getBarChartOptions() {
-    return {
-        responsive: true,
-        plugins: {
-            legend: { display: false },
-            title: { display: false },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        const value = context.parsed.y;
-                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                        const percent = total ? ((value / total) * 100).toFixed(1) : '0.0';
-                        return `$${value.toLocaleString()} (${percent}%)`;
+// Render top merchants chart
+function renderMerchantChart(expenses) {
+    destroyChart('merchantChart');
+    
+    const merchantTotals = {};
+    expenses.forEach(expense => {
+        const merchant = (expense.description || 'Unknown').split(' ')[0].toUpperCase();
+        merchantTotals[merchant] = (merchantTotals[merchant] || 0) + Number(expense.amount || 0);
+    });
+    
+    // Get top 10 merchants
+    const sortedMerchants = Object.entries(merchantTotals)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 10);
+    
+    const ctx = document.getElementById('merchantChart')?.getContext('2d');
+    if (!ctx) return;
+    
+    chartInstances.merchantChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sortedMerchants.map(([merchant]) => merchant.length > 15 ? merchant.substring(0, 15) + '...' : merchant),
+            datasets: [{
+                data: sortedMerchants.map(([, total]) => total),
+                backgroundColor: getCSSColors(),
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { display: false },
+                datalabels: {
+                    anchor: 'end',
+                    align: 'right',
+                    formatter: (value) => '$' + value.toLocaleString(),
+                    font: { size: 10, weight: 'bold' }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
                     }
                 }
-            },
-            datalabels: {
-                color: '#222',
-                font: { size: 16, family: 'Montserrat', weight: '700' },
-                anchor: 'end',
-                align: 'end',
-                formatter: function(value, context) {
-                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                    const percent = total ? ((value / total) * 100).toFixed(1) : '0.0';
-                    return percent + '%';
-                }
             }
         },
-        layout: { padding: 32 },
-        scales: {
-            x: {
-                grid: { display: false },
-                ticks: { color: 'var(--mountbatten-pink)', font: { size: 20, family: 'Montserrat', weight: '700' } }
-            },
-            y: {
-                grid: { color: 'rgba(157,129,137,0.08)' },
-                ticks: { color: 'var(--mountbatten-pink)', font: { size: 20, family: 'Montserrat', weight: '700' }, beginAtZero: true }
-            }
-        }
-    };
+        plugins: [window.ChartDataLabels]
+    });
 }
 
-// Pie chart datalabels configuration
-function getPieDatalabelsConfig() {
-    return {
-        color: '#222',
-        font: { size: 18, family: 'Montserrat', weight: '700' },
-        formatter: function(value, context) {
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percent = total ? ((value / total) * 100).toFixed(1) : '0.0';
-            return percent + '%';
-        },
-        display: true,
-        align: function(context) {
-            const value = context.dataset.data[context.dataIndex];
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percent = total ? (value / total) * 100 : 0;
-            return percent < 6 ? 'end' : 'center';
-        },
-        anchor: function(context) {
-            const value = context.dataset.data[context.dataIndex];
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percent = total ? (value / total) * 100 : 0;
-            return percent < 6 ? 'end' : 'center';
-        },
-        backgroundColor: null,
-        borderColor: '#222',
-        borderWidth: function(context) {
-            const value = context.dataset.data[context.dataIndex];
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percent = total ? (value / total) * 100 : 0;
-            return percent < 6 ? 1.5 : 0;
-        },
-        borderRadius: 4,
-        clamp: false,
-        clip: false,
-        offset: function(context) {
-            // Stagger small labels vertically to avoid overlap
-            const value = context.dataset.data[context.dataIndex];
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percent = total ? (value / total) * 100 : 0;
-            if (percent < 6) {
-                // Alternate up/down and increase offset for each small slice
-                const idx = context.dataIndex;
-                return 36 + (idx % 2 === 0 ? 1 : -1) * (12 + 6 * Math.floor(idx / 2));
-            }
-            return 0;
-        },
-        callout: {
-            display: function(context) {
-                const value = context.dataset.data[context.dataIndex];
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const percent = total ? (value / total) * 100 : 0;
-                return percent < 6;
-            },
-            side: 'border',
-            start: '120%',
-            length: 64,
-            borderColor: '#222',
-            borderWidth: 2,
+// Helper functions
+function destroyChart(chartId) {
+    if (chartInstances[chartId]) {
+        chartInstances[chartId].destroy();
+        delete chartInstances[chartId];
+    }
+}
+
+function updateElement(id, text, changeClass = null) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.textContent = text;
+        if (changeClass) {
+            element.className = element.className.replace(/\b(positive|negative|neutral)\b/g, '');
+            element.classList.add(changeClass);
         }
-    };
+    }
+}
+
+function getDaysInRange(expenses) {
+    if (expenses.length === 0) return 1;
+    
+    const dates = expenses.map(e => new Date(e.date)).filter(d => !isNaN(d));
+    if (dates.length === 0) return 1;
+    
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date(Math.max(...dates));
+    return Math.max(1, Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1);
+}
+
+function getActiveTrendMode() {
+    const activeBtn = document.querySelector('.chart-toggle-btn.active');
+    return activeBtn ? activeBtn.dataset.chart : 'monthly';
+}
+
+function aggregateByTimePeriod(expenses, mode) {
+    const data = {};
+    
+    expenses.forEach(expense => {
+        if (!expense.date) return;
+        
+        const date = new Date(expense.date);
+        let key;
+        
+        switch (mode) {
+            case 'daily':
+                key = expense.date;
+                break;
+            case 'weekly':
+                const weekStart = new Date(date);
+                weekStart.setDate(date.getDate() - date.getDay());
+                key = weekStart.toISOString().slice(0, 10);
+                break;
+            case 'monthly':
+            default:
+                key = expense.date.slice(0, 7);
+                break;
+        }
+        
+        data[key] = (data[key] || 0) + Number(expense.amount || 0);
+    });
+    
+    return data;
+}
+
+function setupChartControls(expenses) {
+    // Setup date range change handler
+    const dateRangeSelect = document.getElementById('dateRangeSelect');
+    const customDateRange = document.getElementById('customDateRange');
+    
+    if (dateRangeSelect) {
+        dateRangeSelect.addEventListener('change', () => {
+            if (customDateRange) {
+                customDateRange.classList.toggle('hidden', dateRangeSelect.value !== 'custom');
+            }
+            renderCharts(window.allExpenses || []);
+        });
+    }
+    
+    // Setup custom date inputs
+    ['startDate', 'endDate'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('change', () => {
+                if (dateRangeSelect?.value === 'custom') {
+                    renderCharts(window.allExpenses || []);
+                }
+            });
+        }
+    });
+    
+    // Setup trend chart toggle buttons
+    document.querySelectorAll('.chart-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.chart-toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderTrendChart(expenses);
+        });
+    });
 }

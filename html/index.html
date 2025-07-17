@@ -18,7 +18,9 @@
 </head>
 <body class="bg-gray-50 min-h-screen" style="font-family: 'Montserrat', 'Segoe UI', sans-serif;">
     <div class="w-full p-0 m-0" style="padding-left:18px; padding-right:18px;">
-        <h1 class="text-4xl font-extrabold mb-8 text-center bg-gradient-to-r from-purple-400 via-pink-500 to-indigo-500 bg-clip-text text-transparent drop-shadow-lg">Expense Tracker</h1>
+        <div class="logo-banner mb-8">
+            <img src="logo.jpg" alt="Expense Tracker" class="logo-background" />
+        </div>
         <!-- Tabbed UI -->
         <div class="glass-block p-2 mb-8">
             <div class="flex" style="border-bottom: 3px solid var(--mint); margin-bottom: 1rem;">
@@ -32,15 +34,21 @@
                     <div class="flex flex-row items-center gap-2 w-full">
                         <input type="file" name="statement" id="statement" accept=".csv,.pdf" class="rounded px-2 py-2 w-48" required />
                         <select id="cardSelect" name="card" class="rounded px-2 py-2">
-                            <option value="">Select Card</option>
-                            <option value="chase sapphire">Chase Sapphire</option>
-                            <option value="venture x">Venture X</option>
-                            <option value="discover">Discover</option>
-                            <option value="other">Other (type below)</option>
+                            <option value="">Select Card/Bank</option>
+                            <option value="chase sapphire" data-bank="chase">Chase Sapphire (Chase)</option>
+                            <option value="venture x" data-bank="generic">Venture X (Capital One)</option>
+                            <option value="discover" data-bank="discover">Discover Card</option>
+                            <option value="bofa credit" data-bank="bofa">Bank of America Credit</option>
+                            <option value="wells fargo credit" data-bank="wells_fargo">Wells Fargo Credit</option>
+                            <option value="amex" data-bank="amex">American Express</option>
+                            <option value="citi credit" data-bank="citi">Citi Credit Card</option>
+                            <option value="auto-detect" data-bank="generic">Auto-detect Bank</option>
+                            <option value="other" data-bank="generic">Other (type below)</option>
                         </select>
                         <input type="text" id="customCardInput" name="custom_card" class="rounded px-2 py-2" placeholder="Enter card name" style="display:none; min-width:120px;" />
                         <button type="submit" class="btn-pastel">Upload Statement</button>
                         <button id="recategorizeBtn" type="button" class="btn-pastel ml-2">Re-categorize All</button>
+                        <button id="manageCategoriesBtn" type="button" class="btn-pastel ml-2">Manage Categories</button>
                         <button id="deleteAllBtn" class="btn-pastel-red ml-2" style="margin-left:auto;">Delete All Expenses</button>
 <script>
 // Show/hide custom card input based on dropdown
@@ -149,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         </select>
                                         <div class="flex flex-col gap-1 mt-2">
                                             <button id="autofillWhoAllBtn" class="btn-pastel text-xs px-2 py-1 rounded mb-1" type="button">Autofill All</button>
-                                            <button id="autofillWhoSelectedBtn" class="btn-pastel text-xs px-2 py-1 rounded" type="button">Fill Selected</button>
+                                            <button id="autofillWhoSelectedBtn" class="btn-pastel text-xs px-2 py-1 rounded mb-1" type="button">Fill Selected</button>
                                         </div>
                                     </div>
                                 </th>
@@ -167,18 +175,77 @@ document.addEventListener('DOMContentLoaded', function() {
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- Floating Delete Button -->
+                <div id="floatingDeleteBtn" class="floating-delete-btn" style="display: none;">
+                    <button id="bulkDeleteBtn" class="btn-pastel-red px-4 py-2 rounded-lg shadow-lg">
+                        <span>🗑️ Delete Selected (<span id="selectedCount">0</span>)</span>
+                    </button>
+                </div>
+                
                 <!-- Recent Large Expenses Block -->
                 <div id="recentLargeBlock" class="recent-large-block glass-block mt-2 mb-6 flex flex-col items-start"></div>
             </div>
             <div id="tab-analytics" class="tab-content" style="display:none;">
-                <div class="flex items-center gap-4 mb-4">
-                    <label for="analyticsToggle" class="text-sm font-semibold text-purple-200">View:</label>
-                    <select id="analyticsToggle" class="rounded px-2 py-1 text-sm bg-white text-gray-900">
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                    </select>
-                    <button id="darkModeToggle" class="ml-auto btn-pastel text-xs px-3 py-1">🌙 Dark Mode</button>
+                <!-- Analytics Controls -->
+                <div class="glass-block p-4 mb-6">
+                    <div class="flex flex-col md:flex-row items-center gap-4 mb-4">
+                        <div class="flex items-center gap-2">
+                            <label for="analyticsToggle" class="text-sm font-semibold text-purple-200">View:</label>
+                            <select id="analyticsToggle" class="rounded px-2 py-1 text-sm bg-white text-gray-900">
+                                <option value="monthly">Monthly</option>
+                                <option value="yearly">Yearly</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="dateRangeSelect" class="text-sm font-semibold text-purple-200">Period:</label>
+                            <select id="dateRangeSelect" class="rounded px-2 py-1 text-sm bg-white text-gray-900">
+                                <option value="all">All Time</option>
+                                <option value="last30">Last 30 Days</option>
+                                <option value="last90">Last 90 Days</option>
+                                <option value="thisMonth">This Month</option>
+                                <option value="lastMonth">Last Month</option>
+                                <option value="thisYear">This Year</option>
+                                <option value="custom">Custom Range</option>
+                            </select>
+                        </div>
+                        <div id="customDateRange" class="hidden flex items-center gap-2">
+                            <input type="date" id="startDate" class="rounded px-2 py-1 text-sm bg-white text-gray-900">
+                            <span class="text-purple-200">to</span>
+                            <input type="date" id="endDate" class="rounded px-2 py-1 text-sm bg-white text-gray-900">
+                        </div>
+                        <button id="darkModeToggle" class="ml-auto btn-pastel text-xs px-3 py-1">🌙 Dark Mode</button>
+                    </div>
                 </div>
+
+                <!-- Analytics Summary Cards -->
+                <div class="analytics-summary grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="summary-card glass-block p-4">
+                        <div class="summary-icon">💳</div>
+                        <div class="summary-label">Total Spending</div>
+                        <div id="analyticsTotalSpending" class="summary-value">$0</div>
+                        <div id="analyticsSpendingChange" class="summary-change">--</div>
+                    </div>
+                    <div class="summary-card glass-block p-4">
+                        <div class="summary-icon">📊</div>
+                        <div class="summary-label">Avg per Day</div>
+                        <div id="analyticsAvgDaily" class="summary-value">$0</div>
+                        <div id="analyticsDailyChange" class="summary-change">--</div>
+                    </div>
+                    <div class="summary-card glass-block p-4">
+                        <div class="summary-icon">🏷️</div>
+                        <div class="summary-label">Top Category</div>
+                        <div id="analyticsTopCategory" class="summary-value">--</div>
+                        <div id="analyticsTopCategoryAmount" class="summary-change">$0</div>
+                    </div>
+                    <div class="summary-card glass-block p-4">
+                        <div class="summary-icon">🎯</div>
+                        <div class="summary-label">Transactions</div>
+                        <div id="analyticsTransactionCount" class="summary-value">0</div>
+                        <div id="analyticsTransactionChange" class="summary-change">--</div>
+                    </div>
+                </div>
+
                 <!-- Text to SQL UI -->
                 <div class="glass-block p-4 mb-6">
                     <h2 class="text-lg font-semibold mb-2 text-purple-200">Ask a Question (Text to SQL)</h2>
@@ -188,23 +255,50 @@ document.addEventListener('DOMContentLoaded', function() {
                     </form>
                     <div id="textToSqlResult" class="mt-4"></div>
                 </div>
-                <!-- Default Analytics Charts -->
-                <div class="charts-row mb-8">
-                    <div class="chart-bg p-6">
-                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Spending by Category</h2>
-                        <canvas id="categoryPieChart" height="320" width="320"></canvas>
+
+                <!-- Enhanced Charts Grid -->
+                <div class="analytics-charts">
+                    <!-- Row 1: Main Overview Charts -->
+                    <div class="charts-row mb-6">
+                        <div class="chart-bg p-6">
+                            <div class="chart-header flex justify-between items-center mb-4">
+                                <h2 class="text-lg font-semibold text-purple-200">Spending Trends</h2>
+                                <div class="chart-controls">
+                                    <button class="chart-toggle-btn active" data-chart="monthly">Monthly</button>
+                                    <button class="chart-toggle-btn" data-chart="weekly">Weekly</button>
+                                    <button class="chart-toggle-btn" data-chart="daily">Daily</button>
+                                </div>
+                            </div>
+                            <canvas id="trendChart" height="300"></canvas>
+                        </div>
+                        <div class="chart-bg p-6">
+                            <h2 class="text-lg font-semibold mb-4 text-purple-200">Category Breakdown</h2>
+                            <canvas id="categoryPieChart" height="320"></canvas>
+                        </div>
                     </div>
-                    <div class="chart-bg p-6">
-                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Needs vs Luxury</h2>
-                        <canvas id="needLuxuryPieChart" height="320" width="320"></canvas>
+
+                    <!-- Row 2: Comparative Charts -->
+                    <div class="charts-row mb-6">
+                        <div class="chart-bg p-6">
+                            <h2 class="text-lg font-semibold mb-4 text-purple-200">Needs vs Luxury</h2>
+                            <canvas id="needLuxuryPieChart" height="320"></canvas>
+                        </div>
+                        <div class="chart-bg p-6">
+                            <h2 class="text-lg font-semibold mb-4 text-purple-200">Spender Comparison</h2>
+                            <canvas id="spenderPieChart" height="320"></canvas>
+                        </div>
                     </div>
-                    <div class="chart-bg p-6">
-                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Gautami vs Ameya</h2>
-                        <canvas id="spenderPieChart" height="320" width="320"></canvas>
-                    </div>
-                    <div class="chart-bg p-6">
-                        <h2 class="text-lg font-semibold mb-2 text-purple-200">Monthly Spending (Bar)</h2>
-                        <canvas id="monthlyBarChart" height="320" width="320"></canvas>
+
+                    <!-- Row 3: Insights and Patterns -->
+                    <div class="charts-row mb-6">
+                        <div class="chart-bg p-6">
+                            <h2 class="text-lg font-semibold mb-4 text-purple-200">Spending by Day of Week</h2>
+                            <canvas id="dayOfWeekChart" height="300"></canvas>
+                        </div>
+                        <div class="chart-bg p-6">
+                            <h2 class="text-lg font-semibold mb-4 text-purple-200">Top Merchants</h2>
+                            <canvas id="merchantChart" height="300"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -217,6 +311,21 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
 
 
+    </div>
+
+    <!-- Category Management Modal -->
+    <div id="categoryModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Manage Categories</h2>
+                <span class="modal-close" onclick="closeCategoryModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="categoryList" class="category-list">
+                    <!-- Categories will be populated here -->
+                </div>
+            </div>
+        </div>
     </div>
 </body>
 </html>

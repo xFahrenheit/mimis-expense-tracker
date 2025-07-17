@@ -240,8 +240,8 @@ body.dark .category-badge-table {
 }
 .charts-row .chart-bg {
   flex: 1 1 320px;
-  min-width: 280px;
-  max-width: 340px;
+  min-width: 300px;
+  max-width: 350px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -250,20 +250,24 @@ body.dark .category-badge-table {
   border-radius: 1.5rem;
   box-shadow: 0 8px 32px 0 rgba(244, 172, 183, 0.15);
   border: 1px solid var(--mountbatten-pink);
-  padding: 18px 12px 12px 12px;
+  padding: 20px 16px 16px 16px;
   margin: 0;
 }
 .charts-row h2 {
   font-size: 1.1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
   text-align: center;
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  font-weight: 600;
+  color: #333;
 }
 .charts-row canvas {
   display: block;
   margin: 0 auto;
   max-width: 100%;
-  height: 320px !important;
-  width: 320px !important;
+  height: auto !important;
+  width: 100% !important;
+  max-height: 280px;
 }
 @media (max-width: 1200px) {
   .charts-row {
@@ -271,29 +275,31 @@ body.dark .category-badge-table {
     gap: 16px;
   }
   .charts-row .chart-bg {
-    min-width: 220px;
-    max-width: 48vw;
-    padding: 12px 4px 8px 4px;
+    min-width: 260px;
+    max-width: 45vw;
+    padding: 16px 12px 12px 12px;
   }
   .charts-row canvas {
-    height: 220px !important;
-    width: 220px !important;
+    height: auto !important;
+    width: 100% !important;
+    max-height: 240px;
   }
 }
 @media (max-width: 900px) {
   .charts-row {
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
   }
   .charts-row .chart-bg {
-    min-width: 180px;
-    max-width: 98vw;
-    padding: 8px 2px 6px 2px;
+    min-width: 300px;
+    max-width: 90vw;
+    padding: 16px 12px 12px 12px;
   }
   .charts-row canvas {
-    height: 180px !important;
-    width: 180px !important;
+    height: auto !important;
+    width: 100% !important;
+    max-height: 260px;
   }
 }
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
@@ -360,7 +366,7 @@ html, body, * {
 
 body {
   min-height: 100vh;
-  background: var(--platinum);
+  background: linear-gradient(135deg, #f8f4f6 0%, var(--champagne-pink) 30%, var(--platinum) 70%, #f0e6f2 100%);
   margin: 0;
   padding: 0;
   width: 100vw;
@@ -663,4 +669,320 @@ td .delete-row-btn {
   background: var(--platinum);
   border-radius: 1rem;
   color: var(--mountbatten-pink);
+}
+
+/* Floating Delete Button */
+.floating-delete-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 1000;
+  animation: slideInUp 0.3s ease-out;
+}
+
+.floating-delete-btn button {
+  background: #ff4757 !important;
+  color: white !important;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(255, 71, 87, 0.4);
+  transition: all 0.2s ease;
+}
+
+.floating-delete-btn button:hover {
+  background: #ff3742 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(255, 71, 87, 0.5);
+}
+
+.floating-delete-btn button:active {
+  transform: translateY(0);
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .floating-delete-btn {
+    bottom: 1rem;
+    right: 1rem;
+  }
+  
+  .floating-delete-btn button {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Category Management Styles */
+.category-chip {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.category-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* Enhanced Analytics Styles */
+.analytics-summary {
+  margin-bottom: 2rem;
+}
+
+.summary-card {
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.summary-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.summary-label {
+  font-size: 0.85rem;
+  color: var(--mountbatten-pink);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.summary-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--zomp);
+  margin-bottom: 0.25rem;
+}
+
+.summary-change {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.summary-change.positive {
+  color: #22c55e;
+}
+
+.summary-change.negative {
+  color: #ef4444;
+}
+
+.summary-change.neutral {
+  color: var(--mountbatten-pink);
+}
+
+.chart-header {
+  border-bottom: 1px solid var(--rosy-brown);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.chart-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chart-toggle-btn {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--mint);
+  background: transparent;
+  color: var(--mint);
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chart-toggle-btn.active,
+.chart-toggle-btn:hover {
+  background: var(--mint);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .analytics-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .chart-controls {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .chart-toggle-btn {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.5rem;
+  }
+}
+
+/* Category Management Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--mountbatten-pink);
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  font-weight: 600;
+}
+
+.modal-close {
+  font-size: 24px;
+  cursor: pointer;
+  color: #9ca3af;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--mountbatten-pink);
+}
+
+.modal-body {
+  padding: 20px 24px 24px;
+}
+
+.category-list {
+  display: grid;
+  gap: 12px;
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--platinum) 0%, var(--champagne-pink) 100%);
+}
+
+.category-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.category-emoji {
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.category-emoji:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.category-name {
+  font-weight: 600;
+  color: var(--mountbatten-pink);
+  text-transform: capitalize;
+}
+
+.category-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-small {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-edit {
+  background: var(--mint);
+  color: white;
+}
+
+.btn-edit:hover {
+  background: #2d8a5f;
+}
+
+/* Logo banner styling */
+.logo-banner {
+  width: 100%;
+  margin: -24px -24px 24px -24px; /* Extend beyond container padding */
+  overflow: hidden;
+  border-radius: 1.5rem 1.5rem 0 0; /* Match container border radius on top */
+  box-shadow: 0 4px 20px rgba(244, 172, 183, 0.2);
+}
+
+.logo-background {
+  width: 100%;
+  height: auto; /* Let it scale naturally */
+  max-height: 120px; /* But limit the maximum height */
+  object-fit: contain; /* Show the full logo without cropping */
+  object-position: center;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.logo-background:hover {
+  transform: scale(1.01);
+}
+
+@media (max-width: 768px) {
+  .logo-banner {
+    margin: -20px -20px 20px -20px;
+  }
+  
+  .logo-background {
+    max-height: 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo-banner {
+    margin: -16px -16px 16px -16px;
+  }
+  
+  .logo-background {
+    max-height: 80px;
+  }
 }

@@ -85,6 +85,9 @@ export function attachFilterAndSortListeners() {
     if (thAmount) thAmount.addEventListener('click', () => toggleSort('amount'));
     if (thDescription) thDescription.addEventListener('click', () => toggleSort('description'));
     
+    // Initialize sort arrows display
+    updateSortArrows();
+    
     // Filter bar show/hide logic
     document.querySelectorAll('.filter-arrow').forEach(arrow => {
         arrow.addEventListener('click', (e) => {
@@ -113,16 +116,25 @@ export function toggleSort(column) {
     if (sortState.column === column) {
         setSortState({ ...sortState, direction: sortState.direction * -1 });
     } else {
-        setSortState({ column, direction: 1 });
+        setSortState({ column, direction: -1 }); // Default to descending (newest first for dates)
     }
     
-    // Update sort arrows
+    updateSortArrows();
+    applyColumnFilters();
+}
+
+// Update sort arrow display
+export function updateSortArrows() {
     ['date','amount','description'].forEach(col => {
         const el = document.getElementById('sort-' + col);
-        if (el) el.textContent = (sortState.column === col)
-            ? (sortState.direction === 1 ? '↑' : '↓')
-            : '⇅';
+        if (el) {
+            if (sortState.column === col) {
+                el.innerHTML = sortState.direction === 1 
+                    ? '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M8 4l-4 4h8l-4-4z" fill="var(--mint)"/></svg>' 
+                    : '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M8 12l4-4H4l4 4z" fill="var(--mint)"/></svg>';
+            } else {
+                el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+            }
+        }
     });
-    
-    applyColumnFilters();
 }

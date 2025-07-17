@@ -1,7 +1,7 @@
 // Configuration constants
 export const API_URL = 'http://localhost:3001';
 
-// Category metadata
+// Category metadata (will be loaded from backend)
 export let CATEGORY_META = {
     food:      { color: '#a78bfa', icon: '🍔' },
     groceries: { color: '#22c55e', icon: '🛒' },
@@ -17,6 +17,22 @@ export let CATEGORY_META = {
 
 export let CATEGORY_LIST = Object.keys(CATEGORY_META);
 
+// Load categories from backend
+export async function loadCategoriesFromBackend() {
+    try {
+        const response = await fetch(`${API_URL}/categories`);
+        const data = await response.json();
+        
+        CATEGORY_META = data.metadata;
+        CATEGORY_LIST = data.categories;
+        
+        return { categories: CATEGORY_LIST, metadata: CATEGORY_META };
+    } catch (error) {
+        console.error('Failed to load categories from backend:', error);
+        return { categories: CATEGORY_LIST, metadata: CATEGORY_META };
+    }
+}
+
 // Color palette for charts
 export const CHART_COLORS = [
     '#60a5fa','#f87171','#34d399','#fbbf24','#a78bfa','#f472b6','#38bdf8','#facc15','#4ade80','#f472b6'
@@ -25,7 +41,7 @@ export const CHART_COLORS = [
 // Global state variables
 export let allExpenses = [];
 export let filteredExpenses = [];
-export let sortState = { column: null, direction: 1 }; // 1: asc, -1: desc
+export let sortState = { column: 'date', direction: -1 }; // 1: asc, -1: desc (default: newest first)
 
 // State setters (these mutate the exported variables)
 export const setAllExpenses = (expenses) => { 

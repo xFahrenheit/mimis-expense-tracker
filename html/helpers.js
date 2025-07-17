@@ -5,6 +5,95 @@ export function genColors(n) {
     return Array.from({length: n}, (_,i) => CHART_COLORS[i % CHART_COLORS.length]);
 }
 
+// Get CSS colors for charts (alias for genColors with default count)
+export function getCSSColors(count = 20) {
+    return genColors(count);
+}
+
+// Get pie chart options
+export function getPieChartOptions() {
+    return {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    padding: 15,
+                    usePointStyle: true,
+                    font: {
+                        family: "'Montserrat', 'Segoe UI', sans-serif",
+                        size: 12,
+                        weight: '600'
+                    },
+                    color: '#333'
+                }
+            },
+            datalabels: {
+                color: '#fff',
+                font: {
+                    family: "'Montserrat', 'Segoe UI', sans-serif",
+                    weight: 'bold',
+                    size: 11
+                },
+                formatter: (value, ctx) => {
+                    const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = ((value / total) * 100).toFixed(1);
+                    return percentage > 8 ? `${percentage}%` : '';
+                },
+                textShadowColor: 'rgba(0, 0, 0, 0.7)',
+                textShadowBlur: 3
+            }
+        }
+    };
+}
+
+// Get bar chart options
+export function getBarChartOptions() {
+    return {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.2,
+        plugins: {
+            legend: { display: false },
+            datalabels: {
+                color: '#333',
+                font: {
+                    family: "'Montserrat', 'Segoe UI', sans-serif",
+                    weight: 'bold',
+                    size: 10
+                },
+                formatter: (value) => `$${value.toFixed(0)}`,
+                anchor: 'end',
+                align: 'top'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    font: {
+                        family: "'Montserrat', 'Segoe UI', sans-serif",
+                        size: 11
+                    },
+                    callback: function(value) {
+                        return '$' + value.toFixed(0);
+                    }
+                }
+            },
+            x: {
+                ticks: {
+                    font: {
+                        family: "'Montserrat', 'Segoe UI', sans-serif",
+                        size: 11
+                    }
+                }
+            }
+        }
+    };
+}
+
 // Get last N months as YYYY-MM strings
 export function getLastNMonths(n) {
     const months = [];

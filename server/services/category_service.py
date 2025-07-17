@@ -4,14 +4,111 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import string
+from flask import jsonify
 
 DB_PATH = 'expense_tracker.db'
-CATEGORY_LABELS = [
+DEFAULT_CATEGORY_LABELS = [
     "food", "groceries", "entertainment", "travel", "utilities", "shopping", "gifts", "medicines", "charity", "school"
 ]
 
 _embedder = None
 _category_embeddings = None
+_current_categories = None
+
+def get_all_categories():
+    """Get all categories (default + custom)"""
+    global _current_categories
+    if _current_categories is None:
+        _current_categories = DEFAULT_CATEGORY_LABELS.copy()
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.execute('SELECT name FROM custom_categories')
+            custom_cats = [row[0] for row in cur.fetchall()]
+            _current_categories.extend(custom_cats)
+    return _current_categories
+
+def refresh_categories():
+    """Force refresh of category cache"""
+    global _current_categories, _category_embeddings
+    _current_categories = None
+    _category_embeddings = None
+
+def add_custom_category(name, icon='🏷️', color='#818cf8'):
+    """Add a new custom category"""
+    name = name.lower().strip()
+    if not name:
+        return False
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        try:
+            conn.execute('INSERT INTO custom_categories (name, icon, color) VALUES (?, ?, ?)', 
+                        (name, icon, color))
+            conn.commit()
+            refresh_categories()
+            return True
+        except sqlite3.IntegrityError:
+            return False  # Category already exists
+
+def update_custom_category(name, icon=None, color=None):
+    """Update an existing custom category"""
+    name = name.lower().strip()
+    if not name:
+        return False
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        # Check if category exists
+        cur = conn.execute('SELECT name FROM custom_categories WHERE name = ?', (name,))
+        if not cur.fetchone():
+            return False
+        
+        # Build update query dynamically
+        updates = []
+        params = []
+        
+        if icon is not None:
+            updates.append('icon = ?')
+            params.append(icon)
+        
+        if color is not None:
+            updates.append('color = ?')
+            params.append(color)
+        
+        if not updates:
+            return True  # Nothing to update
+        
+        params.append(name)
+        query = f'UPDATE custom_categories SET {", ".join(updates)} WHERE name = ?'
+        
+        try:
+            conn.execute(query, params)
+            conn.commit()
+            refresh_categories()
+            return True
+        except sqlite3.Error:
+            return False
+
+def get_category_metadata():
+    """Get metadata for all categories"""
+    metadata = {
+        'food': {'color': '#a78bfa', 'icon': '🍔'},
+        'groceries': {'color': '#22c55e', 'icon': '🛒'},
+        'entertainment': {'color': '#f472b6', 'icon': '🎬'},
+        'travel': {'color': '#60a5fa', 'icon': '✈️'},
+        'utilities': {'color': '#fbbf24', 'icon': '💡'},
+        'shopping': {'color': '#34d399', 'icon': '🛍️'},
+        'gifts': {'color': '#f87171', 'icon': '🎁'},
+        'medicines': {'color': '#4ade80', 'icon': '💊'},
+        'charity': {'color': '#facc15', 'icon': '🤝'},
+        'school': {'color': '#38bdf8', 'icon': '🎓'},
+    }
+    
+    # Add custom categories
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.execute('SELECT name, icon, color FROM custom_categories')
+        for row in cur.fetchall():
+            name, icon, color = row
+            metadata[name] = {'icon': icon, 'color': color}
+    
+    return metadata
 
 def get_embedder():
     global _embedder
@@ -23,8 +120,9 @@ def get_category_embeddings():
     global _category_embeddings
     if _category_embeddings is None:
         embedder = get_embedder()
+        categories = get_all_categories()
         _category_embeddings = []
-        for cat in CATEGORY_LABELS:
+        for cat in categories:
             examples = CATEGORY_EXAMPLES.get(cat, [cat])
             example_embeds = embedder.encode(examples)
             avg_embed = example_embeds.mean(axis=0)
@@ -62,7 +160,8 @@ def guess_category(description):
     from sklearn.metrics.pairwise import cosine_similarity
     sims = cosine_similarity([desc_embed], cat_embeds)[0]
     best_idx = sims.argmax()
-    return CATEGORY_LABELS[best_idx]
+    categories = get_all_categories()
+    return categories[best_idx]
 
 def guess_need_category(description, category=None):
     desc = (description or '').strip().lower()

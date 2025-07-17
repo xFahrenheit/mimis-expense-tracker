@@ -141,6 +141,36 @@ def delete_expense(row_id):
         conn.commit()
     return jsonify({'success': True, 'message': f'Row {row_id} deleted.'})
 
+def bulk_delete_expenses(req):
+    """Delete multiple expenses by their IDs"""
+    data = req.get_json()
+    if not data or 'ids' not in data:
+        return jsonify({'error': 'No expense IDs provided'}), 400
+    
+    ids = data['ids']
+    if not isinstance(ids, list) or len(ids) == 0:
+        return jsonify({'error': 'Invalid or empty expense IDs list'}), 400
+    
+    # Validate that all IDs are integers
+    try:
+        ids = [int(id) for id in ids]
+    except (ValueError, TypeError):
+        return jsonify({'error': 'All expense IDs must be valid integers'}), 400
+    
+    deleted_count = 0
+    with get_db_connection() as conn:
+        for expense_id in ids:
+            cursor = conn.execute('DELETE FROM expenses WHERE id = ?', (expense_id,))
+            deleted_count += cursor.rowcount
+        conn.commit()
+    
+    return jsonify({
+        'success': True, 
+        'message': f'Successfully deleted {deleted_count} out of {len(ids)} expense(s).',
+        'deleted_count': deleted_count,
+        'requested_count': len(ids)
+    })
+
 def recategorize_all_expenses():
     with get_db_connection() as conn:
         cur = conn.execute('SELECT id, description FROM expenses')
