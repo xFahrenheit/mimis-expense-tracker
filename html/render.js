@@ -156,7 +156,12 @@ export function renderQuickFilterChips(expenses) {
         }
         
         btn.onclick = () => {
-            const filterId = `filter-${chip.type.replace('_', '')}`;
+            let filterId;
+            if (chip.type === 'need_category') {
+                filterId = 'filter-needcat';
+            } else {
+                filterId = `filter-${chip.type.replace('_', '')}`;
+            }
             const filterEl = document.getElementById(filterId);
             if (filterEl) {
                 filterEl.value = chip.label;
@@ -406,9 +411,200 @@ function setupRowListeners(tr, exp) {
 }
 
 function setupInlineEditing(tbody, expenses) {
-    // This would be a complex inline editing system
-    // For now, keeping it simple and referring to the existing functionality
-    // that would need to be extracted from utils.js
+    // Only one cell in edit mode at a time
+    let editingCell = null;
+    let originalContent = '';
+
+    function exitEditMode(save = false) {
+        if (!editingCell) return;
+        let didSave = false;
+        if (save) {
+            const id = editingCell.getAttribute('data-id');
+            const field = editingCell.getAttribute('data-field');
+            const exp = expenses.find(e => e.id == id);
+            let value;
+            if (field === 'who') {
+                const whoSelect = editingCell.querySelector('.edit-inline-who');
+                const whoCustom = editingCell.querySelector('.edit-inline-who-custom');
+                value = whoSelect.value;
+                if (value === '__custom__') {
+                    value = whoCustom.value.trim();
+                    // Add to dropdown for future use
+                    if (value && ![...whoSelect.options].some(opt => opt.value === value)) {
+                        const opt = document.createElement('option');
+                        opt.value = value;
+                        opt.textContent = value;
+                        whoSelect.appendChild(opt);
+                    }
+                }
+            } else if (field === 'category') {
+                const catSelect = editingCell.querySelector('.edit-inline-category');
+                value = catSelect.value;
+            } else {
+                const input = editingCell.querySelector('input,select');
+                value = input.value;
+            }
+            if (exp) {
+                didSave = true;
+                // Don't immediately re-render the cell, just leave it in edit mode until the backend confirms
+                saveInlineEdit(editingCell, exp, field, value, true);
+                return; // Don't exit edit mode yet
+            }
+        }
+        // Only re-render cell if not saving (to avoid flicker/old value overwrite)
+        if (!didSave) {
+            editingCell.innerHTML = originalContent;
+            editingCell.classList.remove('editing-cell');
+            editingCell = null;
+            originalContent = '';
+        }
+        // If didSave, do not exit edit mode here; let saveInlineEdit handle it after backend update
+    }
+
+    // saveInlineEdit function
+    async function saveInlineEdit(cell, exp, field, value, closeCellAfter = false) {
+        const { API_URL } = await import('./config.js');
+        // PATCH to backend
+        const id = exp.id;
+        const payload = { [field]: value };
+        await fetch(`${API_URL}/expense/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        // Update local data
+        exp[field] = value;
+        // Re-render the table row (just reload all for simplicity)
+        if (window.loadExpenses) await window.loadExpenses();
+        // If called from inline edit, close the cell after update
+        if (closeCellAfter) {
+            if (cell) {
+                cell.classList.remove('editing-cell');
+            }
+            editingCell = null;
+            originalContent = '';
+        }
+    }
+
+    tbody.querySelectorAll('.editable-cell').forEach(cell => {
+        cell.addEventListener('click', async (e) => {
+            if (editingCell && editingCell !== cell) {
+                exitEditMode();
+            }
+            if (cell.classList.contains('editing-cell')) return;
+            editingCell = cell;
+            originalContent = cell.innerHTML;
+            cell.classList.add('editing-cell');
+            const id = cell.getAttribute('data-id');
+            const field = cell.getAttribute('data-field');
+            const exp = expenses.find(e => e.id == id);
+            let inputHtml = '';
+            
+            if (field === 'category') {
+                const { CATEGORY_LIST, CATEGORY_META } = await import('./config.js');
+                let cat = (exp.category || '').toLowerCase().replace(/[^a-z]/g, '');
+                let catOptions = CATEGORY_LIST.map(c => {
+                    const m = CATEGORY_META[c];
+                    return `<option value="${c}" ${c===cat?'selected':''} data-icon="${m.icon}" data-color="${m.color}">${m.icon} ${c.charAt(0).toUpperCase()+c.slice(1)}</option>`;
+                }).join('');
+                inputHtml = `<select class="edit-inline-category">${catOptions}</select>`;
+            } else if (field === 'need_category') {
+                // Toggle between Need and Luxury on click
+                let currentValue = exp.need_category || 'Need';
+                let newValue = currentValue === 'Need' ? 'Luxury' : 'Need';
+                saveInlineEdit(cell, exp, field, newValue, true);
+                return; // Skip the rest of the editing setup
+            } else if (field === 'amount') {
+                inputHtml = `<input type="number" class="edit-inline-amount w-full px-1 py-1 rounded text-xs" value="${exp.amount || ''}" step="0.01" />`;
+            } else if (field === 'date') {
+                inputHtml = `<input type="date" class="edit-inline-date w-full px-1 py-1 rounded text-xs" value="${exp.date || ''}" />`;
+            } else if (field === 'who') {
+                // Spender edit: dropdown with Ameya, Gautami, or custom
+                let whoVal = exp.who || '';
+                inputHtml = `<select class="edit-inline-who w-full px-1 py-1 rounded text-xs">
+                    <option value="Ameya" ${whoVal==='Ameya'?'selected':''}>Ameya</option>
+                    <option value="Gautami" ${whoVal==='Gautami'?'selected':''}>Gautami</option>
+                    <option value="__custom__" ${(whoVal!=='Ameya'&&whoVal!=='Gautami')?'selected':''}>Other...</option>
+                </select>
+                <input type="text" class="edit-inline-who-custom w-full px-1 py-1 rounded text-xs mt-1" placeholder="Enter name" style="display:${(whoVal!=='Ameya'&&whoVal!=='Gautami')?'':'none'};" value="${(whoVal!=='Ameya'&&whoVal!=='Gautami')?whoVal:''}" />`;
+            } else {
+                inputHtml = `<input type="text" class="edit-inline-${field} w-full px-1 py-1 rounded text-xs" value="${exp[field] || ''}" />`;
+            }
+            cell.innerHTML = inputHtml;
+            const input = cell.querySelector('input,select');
+            if (field === 'who') {
+                const whoSelect = cell.querySelector('.edit-inline-who');
+                const whoCustom = cell.querySelector('.edit-inline-who-custom');
+                whoSelect.addEventListener('change', () => {
+                    if (whoSelect.value === '__custom__') {
+                        whoCustom.style.display = '';
+                        whoCustom.required = true;
+                        whoCustom.focus();
+                    } else {
+                        whoCustom.style.display = 'none';
+                        whoCustom.required = false;
+                    }
+                });
+            }
+            if (input) input.focus();
+            
+            // Save on blur or enter
+            input.addEventListener('blur', () => {
+                if (field === 'who') {
+                    const whoSelect = cell.querySelector('.edit-inline-who');
+                    const whoCustom = cell.querySelector('.edit-inline-who-custom');
+                    let whoVal = whoSelect.value;
+                    if (whoVal === '__custom__') {
+                        whoVal = whoCustom.value.trim();
+                        // Add to dropdown for future use
+                        if (whoVal && ![...whoSelect.options].some(opt => opt.value === whoVal)) {
+                            const opt = document.createElement('option');
+                            opt.value = whoVal;
+                            opt.textContent = whoVal;
+                            whoSelect.appendChild(opt);
+                        }
+                    }
+                    saveInlineEdit(cell, exp, field, whoVal);
+                } else {
+                    saveInlineEdit(cell, exp, field, input.value);
+                }
+            });
+            
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    if (field === 'who') {
+                        const whoSelect = cell.querySelector('.edit-inline-who');
+                        const whoCustom = cell.querySelector('.edit-inline-who-custom');
+                        let whoVal = whoSelect.value;
+                        if (whoVal === '__custom__') {
+                            whoVal = whoCustom.value.trim();
+                            if (whoVal && ![...whoSelect.options].some(opt => opt.value === whoVal)) {
+                                const opt = document.createElement('option');
+                                opt.value = whoVal;
+                                opt.textContent = whoVal;
+                                whoSelect.appendChild(opt);
+                            }
+                        }
+                        saveInlineEdit(cell, exp, field, whoVal);
+                    } else {
+                        saveInlineEdit(cell, exp, field, input.value);
+                    }
+                } else if (e.key === 'Escape') {
+                    exitEditMode(false);
+                }
+            });
+            
+            // Prevent click bubbling to tbody
+            e.stopPropagation();
+        });
+    });
+
+    // Exit edit mode when clicking outside any cell
+    document.addEventListener('click', function docClick(e) {
+        if (editingCell && !editingCell.contains(e.target)) {
+            exitEditMode();
+        }
+    }, { capture: true });
 }
 
 function setupAutofillButtons() {
@@ -418,7 +614,9 @@ function setupAutofillButtons() {
             const bar = document.getElementById('filterbar-who');
             if (bar) {
                 bar.style.display = 'block';
-                // Autofill logic would go here
+                let existing = bar.querySelector('.autofill-inline-input');
+                if (existing) existing.remove();
+                showAutofillInput('all');
             }
         };
     }
@@ -429,8 +627,100 @@ function setupAutofillButtons() {
             const bar = document.getElementById('filterbar-who');
             if (bar) {
                 bar.style.display = 'block';
-                // Autofill logic would go here
+                let existing = bar.querySelector('.autofill-inline-input');
+                if (existing) existing.remove();
+                showAutofillInput('selected');
             }
         };
     }
+}
+
+// Helper function to show autofill input
+function showAutofillInput(mode) {
+    const bar = document.getElementById('filterbar-who');
+    if (!bar) return;
+    
+    // Remove any existing autofill input
+    let existing = bar.querySelector('.autofill-inline-input');
+    if (existing) existing.remove();
+    
+    // Create input group
+    const div = document.createElement('div');
+    div.className = 'autofill-inline-input flex gap-2 mt-2';
+    div.innerHTML = `
+        <input type="text" id="autofill-who-input" name="autofill-who-input" class="autofill-who-input rounded px-2 py-1 text-xs border" placeholder="Enter spender name..." style="min-width:120px;" />
+        <button class="autofill-confirm-btn btn-pastel">OK</button>
+        <button class="autofill-cancel-btn btn-pastel bg-gray-200 text-gray-700">Cancel</button>
+    `;
+    bar.appendChild(div);
+    
+    const input = div.querySelector('.autofill-who-input');
+    input.focus();
+    
+    // Hide the who filter dropdown while autofill input is open
+    const whoFilter = document.getElementById('filter-who');
+    if (whoFilter) whoFilter.style.display = 'none';
+    
+    // Confirm logic
+    const confirm = async () => {
+        const value = input.value.trim();
+        if (!value) { 
+            input.focus(); 
+            return; 
+        }
+        
+        div.querySelectorAll('button').forEach(btn => btn.disabled = true);
+        let success = true;
+        
+        // Get expense IDs to update
+        let ids;
+        if (mode === 'all') {
+            const { allExpenses, filteredExpenses } = await import('./config.js');
+            ids = allExpenses.filter(e => filteredExpenses.some(f => f.id === e.id)).map(e => e.id);
+        } else if (mode === 'selected') {
+            ids = getSelectedExpenseIds();
+            if (!ids.length) { 
+                alert('Select at least one row.'); 
+                div.remove(); 
+                if (whoFilter) whoFilter.style.display = '';
+                return; 
+            }
+        }
+        
+        // Update expenses
+        const { API_URL } = await import('./config.js');
+        for (const id of ids) {
+            const res = await fetch(`${API_URL}/expense/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ who: value })
+            });
+            if (!res.ok) success = false;
+        }
+        
+        // Reload expenses
+        if (window.loadExpenses) await window.loadExpenses();
+        
+        if (!success) {
+            alert('Some updates failed. Please check your connection or try again.');
+        }
+        
+        div.remove();
+        if (whoFilter) whoFilter.style.display = '';
+    };
+    
+    div.querySelector('.autofill-confirm-btn').onclick = confirm;
+    input.addEventListener('keydown', e => { 
+        if (e.key === 'Enter') confirm();
+    });
+    div.querySelector('.autofill-cancel-btn').onclick = () => {
+        div.remove();
+        if (whoFilter) whoFilter.style.display = '';
+    };
+}
+
+// Helper function to get selected expense IDs
+function getSelectedExpenseIds() {
+    const checkboxes = document.querySelectorAll('.autofill-row-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.getAttribute('data-id'));
 }

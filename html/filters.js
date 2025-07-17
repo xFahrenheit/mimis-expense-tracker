@@ -62,6 +62,7 @@ export function applyColumnFilters() {
     // Re-render components with filtered data
     if (window.renderExpenses) window.renderExpenses(filtered);
     if (window.renderCharts) window.renderCharts(filtered);
+    if (window.updateSpendingBlocks) window.updateSpendingBlocks(filtered);
 }
 
 // Attach filter and sort listeners

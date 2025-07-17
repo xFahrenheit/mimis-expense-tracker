@@ -110,3 +110,4 @@ window.renderExpenses = renderExpenses;
 window.renderCharts = renderCharts;
 window.renderFilters = renderFilters;
 window.applyColumnFilters = applyColumnFilters;
+window.updateSpendingBlocks = updateSpendingBlocks;
