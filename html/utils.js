@@ -188,47 +188,6 @@ async function loadStatements() {
     renderStatements(statements);
 }
 
-// --- Make attachDeleteAllBtnListener globally accessible ---
-function attachDeleteAllBtnListener() {
-    const deleteAllBtn = document.getElementById('deleteAllBtn');
-    if (!deleteAllBtn) {
-        console.warn('[ExpenseTracker] Delete All Expenses button not found in DOM when attaching listener.');
-        return;
-    }
-    deleteAllBtn.onclick = async () => {
-        console.log('[ExpenseTracker] Delete All Expenses button clicked.');
-        if (!confirm('Delete ALL expenses, statements, and overrides? This cannot be undone.')) return;
-        deleteAllBtn.disabled = true;
-        deleteAllBtn.textContent = 'Deleting...';
-        try {
-            const res = await fetch(`${API_URL}/delete_all_expenses`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (res.ok) {
-                deleteAllBtn.textContent = 'Deleted!';
-                await loadStatements();
-                await loadExpenses();
-                renderFilters([]);
-                renderCharts([]);
-            } else {
-                let msg = 'Error!';
-                try {
-                    const data = await res.json();
-                    if (data && data.error) msg = data.error;
-                } catch {}
-                deleteAllBtn.textContent = msg;
-            }
-        } catch (e) {
-            deleteAllBtn.textContent = 'Error!';
-        }
-        setTimeout(() => {
-            deleteAllBtn.textContent = 'Delete All Expenses';
-            deleteAllBtn.disabled = false;
-        }, 1200);
-    };
-}
-
 function renderStatements(statements) {
     let container = document.getElementById('statementsList');
     if (!container) {
@@ -292,7 +251,6 @@ function renderStatements(statements) {
 
 }
 
-// (Removed duplicate DOMContentLoaded handler above)
 // Re-categorize All button logic
 const recategorizeBtn = document.getElementById('recategorizeBtn');
 if (recategorizeBtn) {
@@ -490,6 +448,29 @@ function renderQuickFilterChips(expenses) {
             if (chip.type==='need_category') document.getElementById('filter-needcat').value = chip.label;
             applyColumnFilters();
             renderQuickFilterChips(allExpenses);
+
+            // --- Update Gautami's and Ameya's spending blocks for filteredExpenses ---
+            let gautami = 0, ameya = 0, splitTotal = 0;
+            for (const e of filteredExpenses) {
+                if (e.split_cost) {
+                    splitTotal += Number(e.amount || 0);
+                    if (e.who === 'Gautami') {
+                        gautami += Number(e.amount || 0) / 2;
+                        ameya += Number(e.amount || 0) / 2;
+                    } else if (e.who === 'Ameya') {
+                        gautami += Number(e.amount || 0) / 2;
+                        ameya += Number(e.amount || 0) / 2;
+                    } else {
+                        gautami += Number(e.amount || 0) / 2;
+                        ameya += Number(e.amount || 0) / 2;
+                    }
+                } else {
+                    if (e.who === 'Gautami') gautami += Number(e.amount || 0);
+                    if (e.who === 'Ameya') ameya += Number(e.amount || 0);
+                }
+            }
+            document.getElementById('gautamiSpendingValue').textContent = `$${gautami.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+            document.getElementById('ameyaSpendingValue').textContent = `$${ameya.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
         };
         chipDiv.appendChild(btn);
     });
@@ -509,6 +490,29 @@ function renderQuickFilterChips(expenses) {
             if (document.getElementById('filter-needcat')) document.getElementById('filter-needcat').value = '';
             applyColumnFilters();
             renderQuickFilterChips(allExpenses);
+
+            // --- Update Gautami's and Ameya's spending blocks for filteredExpenses ---
+            let gautami = 0, ameya = 0, splitTotal = 0;
+            for (const e of filteredExpenses) {
+                if (e.split_cost) {
+                    splitTotal += Number(e.amount || 0);
+                    if (e.who === 'Gautami') {
+                        gautami += Number(e.amount || 0) / 2;
+                        ameya += Number(e.amount || 0) / 2;
+                    } else if (e.who === 'Ameya') {
+                        gautami += Number(e.amount || 0) / 2;
+                        ameya += Number(e.amount || 0) / 2;
+                    } else {
+                        gautami += Number(e.amount || 0) / 2;
+                        ameya += Number(e.amount || 0) / 2;
+                    }
+                } else {
+                    if (e.who === 'Gautami') gautami += Number(e.amount || 0);
+                    if (e.who === 'Ameya') ameya += Number(e.amount || 0);
+                }
+            }
+            document.getElementById('gautamiSpendingValue').textContent = `$${gautami.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+            document.getElementById('ameyaSpendingValue').textContent = `$${ameya.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
         };
         chipDiv.appendChild(clearBtn);
     }
@@ -1008,7 +1012,6 @@ function renderExpenses(expenses) {
         });
     }, 0);
 }
-// (Removed duplicate tab switching DOMContentLoaded handler above)
 
 // Render filters
 function renderFilters(expenses) {
@@ -1451,16 +1454,19 @@ function renderCharts(expenses) {
         ctxNeed.canvas.width = 800;
     }
 
-    // --- Gautami vs Ameya Pie Chart with Emoji Legends ---
-    // --- Gautami vs Ameya Pie Chart with Emoji Legends ---
-    const spender = { Gautami: 0, Ameya: 0, Other: 0 };
+    // --- Gautami vs Ameya Pie Chart ---
+    const spenderTotals = { Gautami: 0, Ameya: 0 };
     expenses.forEach(e => {
-        if (e.who === 'Gautami') spender.Gautami += Number(e.amount);
-        else if (e.who === 'Ameya') spender.Ameya += Number(e.amount);
-        else spender.Other += Number(e.amount);
+        if (e.split_cost) {
+            // Split cost: each gets half
+            spenderTotals.Gautami += Number(e.amount || 0) / 2;
+            spenderTotals.Ameya += Number(e.amount || 0) / 2;
+        } else {
+            if (e.who === 'Gautami') spenderTotals.Gautami += Number(e.amount || 0);
+            if (e.who === 'Ameya') spenderTotals.Ameya += Number(e.amount || 0);
+        }
     });
-    const spenderEmojis = { Gautami: '👩‍💼', Ameya: '👨‍💼', Other: '👥' };
-    const spenderLabels = Object.keys(spender).map(k => `${spenderEmojis[k]||''} ${k}`);
+    const spenderLabels = ['👩 Gautami', '👨 Ameya'];
     const ctxSpender = document.getElementById('spenderPieChart')?.getContext('2d');
     if (ctxSpender) {
         if (window.spenderChart) window.spenderChart.destroy();
@@ -1469,16 +1475,15 @@ function renderCharts(expenses) {
             data: {
                 labels: spenderLabels,
                 datasets: [{
-                    data: Object.values(spender),
+                    data: [spenderTotals.Gautami, spenderTotals.Ameya],
                     backgroundColor: [
                         getComputedStyle(document.documentElement).getPropertyValue('--mint').trim(),
-                        getComputedStyle(document.documentElement).getPropertyValue('--rosy-brown').trim(),
-                        getComputedStyle(document.documentElement).getPropertyValue('--zomp').trim()
+                        getComputedStyle(document.documentElement).getPropertyValue('--rosy-brown').trim()
                     ]
                 }]
             },
             options: {
-                responsive: true,
+                               responsive: true,
                 plugins: {
                     legend: { display: false },
                     title: { display: false },
@@ -1609,5 +1614,3 @@ if (saveNotesBtn && notesArea) {
         setTimeout(() => saveNotesBtn.textContent = 'Save Notes', 1000);
     });
 }
-
-// (Removed duplicate initial load DOMContentLoaded handler above)

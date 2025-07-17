@@ -1,0 +1,3 @@
+export function renderCharts(expenses) {
+    // ...existing code for all chart rendering...
+}
