@@ -50,12 +50,13 @@ def upload_statement():
         ext = filename.rsplit('.', 1)[1].lower()
         card = request.form.get('card')
         custom_card = request.form.get('custom_card')
+        bank_type = request.form.get('bank_type', 'generic')  # Get bank type
         if card == 'other' and custom_card:
             card = custom_card.strip()
         # Parse file
         if ext == 'pdf':
             statement_id = statement_service.save_pdf_statement(filename, filepath)
-            df = pdf_service.parse_pdf(filepath)
+            df = pdf_service.parse_pdf(filepath, bank_type)  # Pass bank type
         elif ext == 'csv':
             statement_id = statement_service.save_csv_statement(filename, filepath)
             df = expense_service.read_csv(filepath)
@@ -89,6 +90,10 @@ def update_expense_need_category(row_id):
 def delete_expense(row_id):
     return expense_service.delete_expense(row_id)
 
+@app.route('/expenses/bulk_delete', methods=['DELETE'])
+def bulk_delete_expenses():
+    return expense_service.bulk_delete_expenses(request)
+
 @app.route('/expense/<int:row_id>', methods=['PATCH'])
 def patch_expense(row_id):
     return expense_service.patch_expense(row_id, request)
@@ -100,6 +105,47 @@ def get_expenses():
 @app.route('/recategorize', methods=['POST'])
 def recategorize_all_expenses():
     return expense_service.recategorize_all_expenses()
+
+@app.route('/recategorize_all', methods=['POST'])
+def recategorize_all_expenses_new():
+    return expense_service.recategorize_all_expenses()
+
+@app.route('/categories', methods=['GET'])
+def get_categories():
+    return jsonify({
+        'categories': category_service.get_all_categories(),
+        'metadata': category_service.get_category_metadata()
+    })
+
+@app.route('/categories', methods=['POST'])
+def add_category():
+    data = request.get_json()
+    if not data or 'name' not in data:
+        return jsonify({'error': 'Category name is required'}), 400
+    
+    name = data['name'].lower().strip()
+    icon = data.get('icon', '🏷️')
+    color = data.get('color', '#818cf8')
+    
+    if category_service.add_custom_category(name, icon, color):
+        return jsonify({'success': True, 'message': f'Category "{name}" added successfully'})
+    else:
+        return jsonify({'error': 'Category already exists or invalid name'}), 400
+
+@app.route('/categories/<category_name>', methods=['PATCH'])
+def update_category(category_name):
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    name = category_name.lower().strip()
+    icon = data.get('icon')
+    color = data.get('color')
+    
+    if category_service.update_custom_category(name, icon, color):
+        return jsonify({'success': True, 'message': f'Category "{name}" updated successfully'})
+    else:
+        return jsonify({'error': 'Category not found or update failed'}), 400
 
 @app.route('/cleanup', methods=['POST'])
 def cleanup_null_rows():

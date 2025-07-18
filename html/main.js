@@ -7,6 +7,7 @@ import { applyColumnFilters, attachFilterAndSortListeners } from './filters.js';
 import { exportFilteredToCSV, setupDarkModeToggle, setupAnalyticsToggle, setupNotesArea } from './helpers.js';
 import { renderExpenses, renderFilters, renderStatements, renderQuickFilterChips, renderRecentLargeExpenses, renderAverages } from './render.js';
 import { attachDeleteAllBtnListener, setupTabSwitching, setupUploadForm, setupTextToSql } from './dom_handlers.js';
+// Temporarily removed: import { initializeTimePeriods, createTimePeriodTabs, getCurrentPeriodFilter } from './time_periods.js';
 
 // Register ChartDataLabels plugin globally
 if (window.Chart && window.ChartDataLabels) {
@@ -18,6 +19,10 @@ async function loadExpensesMain() {
     const expenses = await loadExpenses();
     setAllExpenses(expenses);
     setFilteredExpenses(expenses);
+    
+    // Initialize time periods (must be done after expenses are loaded)
+    // Temporarily disabled to fix table issue
+    // initializeTimePeriods();
     
     // Apply initial sorting (by date, newest first)
     applyColumnFilters();

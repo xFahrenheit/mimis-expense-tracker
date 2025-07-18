@@ -415,7 +415,7 @@ function setupRowListeners(tr, exp) {
         deleteBtn.addEventListener('click', async (e) => {
             if (confirm('Delete this row?')) {
                 await deleteExpense(exp.id);
-                if (window.loadExpenses) window.loadExpenses();
+                if (window.applyColumnFilters) window.applyColumnFilters();
             }
             e.stopPropagation();
         });
@@ -695,10 +695,10 @@ async function handleBulkDelete(button) {
         // Hide floating button immediately
         updateFloatingButtonVisibility();
         
-        // Reload expenses and wait for completion
-        if (window.loadExpenses) {
-            await window.loadExpenses();
-            console.log('Expenses reloaded successfully');
+        // Apply filters to maintain current view
+        if (window.applyColumnFilters) {
+            window.applyColumnFilters();
+            console.log('Filters reapplied successfully');
         }
         
         alert(`Successfully deleted ${selectedIds.length} expense(s).`);
