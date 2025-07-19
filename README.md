@@ -1,244 +1,141 @@
-# Expense Tracker
+# 💰 Expense Tracker
 
-A comprehensive web application for tracking and analyzing personal expenses with support for bank statement uploads, intelligent categorization, and detailed analytics.
+A beautiful, secure expense tracking application with multi-user support and bank statement automation.
 
-![Expense Tracker](logo.jpg)
+![Expense Tracker](logo/Expense%20Tracker%20logo%20pixel%20art%20style%20girly.jpg)
 
-## 🚀 Features
+## 🚀 Quick Start
 
-### Core Functionality
-- **📊 Multi-view Dashboard**: Expenses, Analytics, and Income Distribution tabs
-- **📁 Statement Upload**: Support for CSV and PDF bank statements from major banks
-- **🏷️ Smart Categorization**: Automatic expense categorization with manual override
-- **✏️ Inline Editing**: Click-to-edit any expense field with real-time updates
-- **🔍 Advanced Filtering**: Filter by category, card, spender, date range, and more
-- **📈 Visual Analytics**: Interactive charts for spending patterns and trends
-- **🔐 Secure Sharing**: Encrypted database sharing for couples/families
+### Prerequisites
+- Python 3.8+ with pip
+- Git (for sharing between users)
+- OpenSSL (for encryption)
 
-### Bank Support
-- Chase Sapphire
-- Capital One Venture X
-- Discover Card
-- Bank of America Credit
-- Wells Fargo Credit
-- American Express
-- Citi Credit Card
-- Auto-detection for unknown formats
+### Installation
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd expense_tracker
 
-### Analytics & Insights
-- **📊 Spending Breakdown**: By category, time period, and person
-- **📅 Time Period Analysis**: Daily, weekly, monthly views
-- **💰 Split Cost Tracking**: Shared expenses between multiple people
-- **🏷️ Need vs Luxury**: Categorize expenses by necessity
-- **📈 Trend Analysis**: Spending patterns over time
+# Install dependencies
+pip install -r server/requirements.txt
 
-## 🛠️ Technology Stack
+# Start the application
+python server/app.py
+```
 
-### Frontend
-- **HTML5** with modern CSS (Tailwind CSS)
-- **Vanilla JavaScript** with ES6 modules
-- **Chart.js** for data visualization
-- **Responsive design** for mobile and desktop
+Open `http://localhost:5000` in your browser and start tracking expenses!
 
-### Backend
-- **Python Flask** REST API
-- **SQLite** database
-- **Pandas** for data processing
-- **PDFplumber** for PDF statement parsing
-- **Flask-CORS** for cross-origin requests
+## 🔐 Multi-User Setup (Couples/Families)
+
+### Initial Setup (First User)
+```bash
+# Set up encryption password
+./setup_password.sh
+
+# Encrypt and push to shared repository
+./db_manager.sh push
+```
+
+### Second User Setup
+```bash
+# Clone the shared repository
+git clone <shared-repo-url>
+cd expense_tracker
+
+# Install dependencies
+pip install -r server/requirements.txt
+
+# Set up the same encryption password
+./setup_password.sh
+
+# Download and decrypt database
+./db_manager.sh pull
+```
+
+### Daily Workflow
+- **Adding expenses:** Use web interface normally
+- **Sharing changes:** Click backup button in web interface OR run `./db_manager.sh push`
+- **Getting updates:** Run `./db_manager.sh pull`
+
+## ✨ Key Features
+
+- **📊 Smart Analytics** - Interactive charts and spending insights
+- **🏷️ Auto-Categorization** - AI-powered expense categorization with custom keywords
+- **📁 Bank Statement Import** - Support for Chase, Capital One Venture X, Discover, BofA, Wells Fargo, Amex, Citi
+- **✏️ Inline Editing** - Click any expense field to edit
+- **🔍 Advanced Filtering** - Filter by date, category, amount, person with saved presets
+- **🔐 Secure Sharing** - AES-256 encryption for couples/families with zero GitHub exposure
+- **💾 One-Click Backup** - Beautiful backup button in web interface
+- **📤 Export Tools** - CSV export with custom date ranges
+
+## 🏦 Bank Statement Import
+
+1. Click **"Upload Statement"** button
+2. Select your bank/card type from dropdown
+3. Choose CSV or PDF file
+4. System automatically parses, categorizes, and handles multiple cardholders
+
+**Supported Banks:** Chase Sapphire, Capital One Venture X, Discover, Bank of America, Wells Fargo, American Express, Citi, plus auto-detection for unknown formats.
+
+
+## 🛡️ Security & Privacy
+
+- **AES-256-CBC encryption** for all financial data
+- **Environment variable passwords** - no interactive prompts
+- **Git-based sharing** - your data never touches third-party services
+- **Local-first** - works completely offline
+
+## 📈 Analytics Features
+
+- **Category breakdown** with interactive charts
+- **Time period analysis** (monthly, yearly trends)
+- **Need vs Luxury** spending categorization
+- **Multi-person expense tracking** for shared households
+- **Custom date ranges** and filtering
+
+## 🔧 Advanced Configuration
+
+### Custom Categories
+- Use **"Manage Categories"** button for full control
+- Add custom icons, colors, and auto-categorization keywords
+- Bulk recategorization tools
+
+### Environment Variables
+```bash
+# Set encryption password (optional, for automation)
+export EXPENSE_DB_PASSWORD="your-secure-password"
+```
 
 ## 📁 Project Structure
 
 ```
 expense_tracker/
-├── html/                    # Frontend files
-│   ├── index.html          # Main application
-│   ├── main.js             # Application entry point
-│   ├── render.js           # Table rendering and inline editing
-│   ├── api.js              # API communication
-│   ├── categories.js       # Category management
-│   ├── filters.js          # Filtering and sorting
-│   ├── charts.js           # Data visualization
-│   ├── time_periods.js     # Time period handling
-│   ├── helpers.js          # Utility functions
-│   ├── config.js           # Configuration and state
-│   └── styles.css          # Custom styling
-├── server/                 # Backend files
-│   ├── app.py              # Flask application
-│   ├── requirements.txt    # Python dependencies
+├── server/
+│   ├── app.py              # Flask web server
 │   ├── services/           # Modular services
+│   │   ├── pdf_service.py  # Bank statement parsing
 │   │   ├── database_service.py
-│   │   ├── expense_service.py
-│   │   ├── category_service.py
-│   │   ├── pdf_service.py
-│   │   ├── statement_service.py
-│   │   └── cleanup_service.py
-│   └── uploads/            # Uploaded statements
-├── security/               # Database security tools
-│   ├── db_manager.sh       # Database encryption/decryption
-│   ├── DATABASE_SECURITY.md # Security documentation
-│   └── db_backups/         # Automatic backups (local only)
-└── logo/                   # Application assets
+│   │   └── ...
+│   └── requirements.txt
+├── html/
+│   ├── index.html          # Web interface
+│   ├── main.js            # Frontend logic
+│   └── styles.css         # Beautiful styling
+├── db_manager.sh          # Encryption/sync tool
+└── setup_password.sh      # Password configuration
 ```
 
-## 🚀 Getting Started
+## 🆘 Troubleshooting
 
-### Prerequisites
-- Python 3.8+
-- Modern web browser
-- Bank statements in CSV or PDF format
+**Backup button not working?**
+- Ensure `EXPENSE_DB_PASSWORD` environment variable is set
+- Check that git repository is properly configured
 
-### Installation
+**PDF parsing failed?**
+- Verify bank type selection matches your statement
+- Check PDF isn't password-protected or image-only
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
-   cd mimis-expense-tracker
-   ```
-
-2. **Set up Python environment**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   cd server
-   pip install -r requirements.txt
-   ```
-
-4. **Start the Flask server**
-   ```bash
-   python app.py
-   ```
-
-5. **Open the application**
-   Open `html/index.html` in your web browser or serve it through a local server.
-
-## 🔐 Secure Multi-User Setup
-
-### For Couples/Families: Encrypted Database Sharing
-
-This expense tracker includes a secure system for sharing your financial data between trusted users (like spouses) without exposing it to GitHub or other third parties.
-
-#### Security Features
-- ✅ **AES-256 Encryption**: Military-grade encryption for your financial data
-- ✅ **Zero GitHub Access**: GitHub only sees encrypted files, never your actual data
-- ✅ **Automatic Backups**: Timestamped backups prevent data loss
-- ✅ **Conflict Detection**: Warns before overwriting changes
-
-#### Setup for Multiple Users
-
-1. **First User Setup** (you've already done this)
-   ```bash
-   # Your database is already created and working
-   ./db_manager.sh encrypt  # Create first encrypted version
-   git add expense_tracker_encrypted.db .gitignore db_manager.sh DATABASE_SECURITY.md
-   git commit -m "Add secure database sharing"
-   git push
-   ```
-
-2. **Second User Setup** (your husband)
-   ```bash
-   git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
-   cd mimis-expense-tracker
-   python -m venv .venv
-   source .venv/bin/activate
-   cd server && pip install -r requirements.txt
-   cd ..
-   ./db_manager.sh decrypt  # Enter the shared password
-   ./setup_password.sh      # Set up backup button password
-   ```
-
-#### Daily Workflow
-
-**To start your session:**
-```bash
-./db_manager.sh sync  # Pull latest + start server automatically
-```
-
-**To end your session:**
-```bash
-# Stop Flask server (Ctrl+C)
-./db_manager.sh upload  # Encrypt + commit + push automatically
-```
-
-#### Database Manager Commands
-- `./db_manager.sh sync` - Pull latest changes and start server
-- `./db_manager.sh upload` - Encrypt and upload your changes
-- `./db_manager.sh status` - Show database information  
-- `./db_manager.sh backup` - Create manual backup
-
-📖 **See `DATABASE_SECURITY.md` for detailed security documentation**
-
-### Quick Start
-1. Upload a bank statement (CSV or PDF)
-2. Select your bank/card type
-3. Review and adjust automatic categorization
-4. Explore your spending patterns in the Analytics tab
-
-## 📊 Usage
-
-### Uploading Statements
-1. Click the **Upload Statement** button
-2. Select your bank statement file (CSV or PDF)
-3. Choose your bank/card type from the dropdown
-4. The system will automatically parse and categorize expenses
-
-### Managing Expenses
-- **Inline Editing**: Click any cell to edit expense details
-- **Categorization**: Use the category dropdown or let the system auto-categorize
-- **Filtering**: Use the filter chips or dropdown menus to view specific expenses
-- **Sorting**: Click column headers to sort by date, amount, category, etc.
-
-### Analytics
-- Switch to the **Analytics** tab for detailed spending insights
-- View spending by category, time period, and person
-- Analyze trends with interactive charts
-- Track shared expenses with split cost features
-
-## 🔧 Configuration
-
-### Adding New Categories
-Edit `html/categories.js` to add new expense categories:
-
-```javascript
-const CATEGORY_META = {
-    'new_category': {
-        icon: '🆕',
-        color: '#FF6B6B',
-        keywords: ['keyword1', 'keyword2']
-    }
-};
-```
-
-### Bank Statement Formats
-The system supports multiple bank statement formats. To add support for a new bank, modify the parsing logic in `server/services/statement_service.py`.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Chart.js for beautiful data visualizations
-- Tailwind CSS for utility-first styling
-- Flask community for excellent documentation
-- PDFplumber for robust PDF parsing
-
-## 📞 Support
-
-If you encounter any issues or have questions, please open an issue on GitHub.
-
----
-
-**Made with ❤️ for personal finance management**
+**Encryption issues?**
+- Run `./setup_password.sh` to reset password
+- Ensure OpenSSL is installed
