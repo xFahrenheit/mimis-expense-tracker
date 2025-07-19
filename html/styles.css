@@ -987,66 +987,231 @@ td .delete-row-btn {
   }
 }
 
-/* Time Period Tabs */
+/* Time Period Folder Tabs */
+.period-folder-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 0; /* Remove gap between tabs and table */
+  margin-left: -1rem;
+  margin-right: -1rem;
+  margin-top: -1rem;
+  padding-left: 1rem;
+  position: relative;
+  overflow: visible;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.period-folder-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Container for each period tab with its month deck */
+.period-tab-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin-right: 0.5rem;
+}
+
+/* Main year/period tabs row */
+.main-period-tabs {
+  display: flex;
+  align-items: end;
+  gap: 0;
+  border-bottom: 2px solid var(--mint);
+  min-height: 4rem;
+  position: relative;
+  overflow: visible;
+  /* Use page background color instead of tab color */
+  background: transparent;
+  border-top: none; /* Remove top border */
+  border-left: none; /* Remove left border */
+  border-right: none; /* Remove right border */
+  border-radius: 0; /* Remove container radius */
+}
+
 .period-tab {
-  background: rgba(255, 255, 255, 0.8);
-  border: 2px solid var(--mint);
+  background: var(--champagne-pink); /* Individual tab background */
   color: var(--zomp);
-  border-radius: 999px;
-  padding: 0.4rem 1rem;
+  border: 2px solid var(--mint); /* Add individual tab borders */
+  border-bottom: none; /* Connect to bottom border line */
+  border-radius: 12px 12px 0 0; /* Rounded top corners like Chrome tabs */
+  padding: 0.7rem 1.2rem;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
   user-select: none;
+  position: relative;
+  z-index: 1;
+  margin-right: -2px; /* Slight overlap for connected appearance */
 }
 
 .period-tab:hover {
-  background: var(--mint);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(108, 189, 160, 0.2);
+  background: var(--platinum);
+  z-index: 3;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 2px 8px rgba(108, 189, 160, 0.15);
 }
 
 .period-tab.active {
-  background: var(--zomp);
-  color: white;
-  border-color: var(--zomp);
-  box-shadow: 0 2px 8px rgba(61, 160, 127, 0.3);
+  background: var(--platinum);
+  color: var(--zomp);
+  z-index: 5;
+  font-weight: 700;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 2px 8px rgba(108, 189, 160, 0.2);
 }
 
-.period-tab.all-time {
+/* All Time Tab */
+.period-tab-all-time {
   background: var(--rosy-brown);
   border-color: var(--rosy-brown);
   color: white;
+  font-weight: 700;
+  min-width: 100px;
 }
 
-.period-tab.all-time:hover {
+.period-tab-all-time:hover {
   background: var(--mountbatten-pink);
   border-color: var(--mountbatten-pink);
 }
 
-.period-tab.all-time.active {
+.period-tab-all-time.active {
   background: var(--mountbatten-pink);
   border-color: var(--mountbatten-pink);
+  color: white;
+}
+
+/* Year Tab - Larger */
+.period-tab-year {
+  background: var(--platinum);
+  border-color: var(--zomp);
+  color: var(--zomp);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.8rem 1.8rem;
+  min-width: 120px;
+}
+
+.period-tab-year:hover {
+  background: var(--mint);
+  color: white;
+}
+
+.period-tab-year.active {
+  background: var(--zomp);
+  color: white;
+  border-color: var(--zomp);
+}
+
+/* Month Container - Google Tab Style at Same Level */
+.month-deck-container {
+  display: none;
+  background: transparent; /* Match page background */
+  padding: 0;
+  margin: 0;
+  align-items: end;
+  flex-direction: row;
+  justify-content: flex-start;
+  opacity: 0;
+  transition: all 0.3s ease-in-out;
+  overflow: visible;
+  white-space: nowrap;
+  gap: 0;
+}
+
+.month-deck-container.expanded {
+  display: flex;
+  opacity: 1;
+}
+
+.month-deck-container .period-tab-month {
+  background: var(--champagne-pink); /* Individual month tab background */
+  border: 2px solid var(--mint); /* Individual borders */
+  border-bottom: none; /* Connect to bottom border line */
+  border-radius: 8px 8px 0 0; /* Smaller rounded corners for month tabs */
+  color: var(--zomp);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.6rem 1rem;
+  min-width: 80px;
+  text-align: center;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: -2px; /* Slight overlap for connected appearance */
+}
+
+.month-deck-container .period-tab-month:first-child {
+  margin-left: 0.5rem;
+}
+
+.month-deck-container .period-tab-month:last-child {
+  margin-right: 0; /* No overlap for last month tab */
+}
+
+.month-deck-container .period-tab-month:hover {
+  background: var(--mint);
+  color: white;
+  z-index: 2;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 2px 6px rgba(108, 189, 160, 0.2);
+}
+
+.month-deck-container .period-tab-month.active {
+  background: var(--mint);
+  color: white;
+  z-index: 3;
+  font-weight: 700;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 2px 8px rgba(108, 189, 160, 0.3);
+}
+
+/* Year tab indicator when expanded */
+.period-tab-year.expanded {
+  background: var(--mint);
+  color: white;
+  border-color: var(--mint);
+  position: relative;
 }
 
 #periodTabsContainer {
-  min-height: 2.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
+  min-height: 3rem;
 }
 
 @media (max-width: 768px) {
   .period-tab {
     font-size: 0.75rem;
-    padding: 0.3rem 0.8rem;
+    padding: 0.5rem 0.8rem;
+    min-width: 70px;
   }
   
-  #periodTabsContainer {
-    gap: 0.3rem;
+  .period-tab-year {
+    font-size: 0.85rem;
+    padding: 0.6rem 1.2rem;
+    min-width: 90px;
+  }
+  
+  .period-tab-month {
+    font-size: 0.7rem;
+    padding: 0.5rem 0.8rem;
+    min-width: 60px;
+  }
+  
+  .period-folder-tabs {
+    margin-left: -0.5rem;
+    margin-right: -0.5rem;
+    padding-left: 0.5rem;
   }
 }

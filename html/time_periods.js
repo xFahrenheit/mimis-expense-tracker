@@ -95,25 +95,39 @@ async function createTimePeriodTabs() {
 
         const { months, years } = getAvailableTimePeriods(expenses);
 
+        // Create main tabs row container
+        const mainTabsRow = document.createElement('div');
+        mainTabsRow.className = 'main-period-tabs';
+        
         // Add "All Time" tab
-        const allTimeTab = createPeriodTab('all-time', 'All Time', true);
-        container.appendChild(allTimeTab);
+        const allTimeTab = createPeriodTab('all-time', 'All Time', 'all-time');
+        mainTabsRow.appendChild(allTimeTab);
 
-        // Add year tabs (limit to recent 5 years)
+        // Add year tabs
         const recentYears = years.slice(0, 5);
         recentYears.forEach(year => {
-            const yearTab = createPeriodTab(year.toString(), year.toString());
-            container.appendChild(yearTab);
+            const yearTab = createPeriodTab(year.toString(), year.toString(), 'year');
+            mainTabsRow.appendChild(yearTab);
+            
+            // Create month container for this year and add it to the main tabs row
+            const monthContainer = document.createElement('div');
+            monthContainer.className = 'month-deck-container';
+            monthContainer.id = `months-${year}`;
+            monthContainer.style.display = 'none';
+            
+            // Add month tabs for this year
+            const yearMonths = months.filter(month => month.startsWith(year.toString()));
+            yearMonths.forEach((month, index) => {
+                const monthTab = createPeriodTab(month, formatPeriodDisplay(month), 'month');
+                monthContainer.appendChild(monthTab);
+            });
+            
+            mainTabsRow.appendChild(monthContainer);
         });
 
-        // Add month tabs (limit to recent 12 months)
-        const recentMonths = months.slice(0, 12);
-        recentMonths.forEach(month => {
-            const monthTab = createPeriodTab(month, formatPeriodDisplay(month));
-            container.appendChild(monthTab);
-        });
+        container.appendChild(mainTabsRow);
 
-        console.log(`Created ${1 + recentYears.length + recentMonths.length} time period tabs`);
+        console.log(`Created ${1 + recentYears.length} main tabs with expandable months`);
         
         // Update spending totals after creating tabs (with all expenses for "All Time" default)
         updateSpendingTotals(expenses);
@@ -123,9 +137,9 @@ async function createTimePeriodTabs() {
 }
 
 // Create individual period tab
-function createPeriodTab(period, displayText, isAllTime = false) {
+function createPeriodTab(period, displayText, tabType = 'month') {
     const tab = document.createElement('button');
-    tab.className = `period-tab ${isAllTime ? 'all-time' : ''}`;
+    tab.className = `period-tab period-tab-${tabType}`;
     tab.textContent = displayText;
     tab.dataset.period = period;
     
@@ -134,10 +148,70 @@ function createPeriodTab(period, displayText, isAllTime = false) {
     }
 
     tab.addEventListener('click', () => {
-        selectTimePeriod(period);
+        if (tabType === 'year') {
+            // Toggle month deck for year tabs
+            toggleMonthDeck(period);
+        } else {
+            // Regular filtering for non-year tabs
+            selectTimePeriod(period);
+        }
     });
 
     return tab;
+}
+
+// Toggle month deck expansion for year tabs
+function toggleMonthDeck(year) {
+    console.log('Toggling month deck for year:', year);
+    
+    const monthContainer = document.getElementById(`months-${year}`);
+    const yearTab = document.querySelector(`[data-period="${year}"]`);
+    
+    console.log('Month container found:', !!monthContainer);
+    console.log('Year tab found:', !!yearTab);
+    
+    if (!monthContainer || !yearTab) return;
+    
+    const isExpanded = monthContainer.classList.contains('expanded');
+    console.log('Currently expanded:', isExpanded);
+    
+    // Close all other month decks first
+    document.querySelectorAll('.month-deck-container').forEach(container => {
+        if (container !== monthContainer) {
+            container.classList.remove('expanded');
+            setTimeout(() => {
+                container.style.display = 'none';
+            }, 300);
+        }
+    });
+    
+    // Remove expanded class from all year tabs
+    document.querySelectorAll('.period-tab-year').forEach(tab => {
+        tab.classList.remove('expanded');
+    });
+    
+    if (isExpanded) {
+        // Collapse this deck
+        console.log('Collapsing deck');
+        monthContainer.classList.remove('expanded');
+        setTimeout(() => {
+            monthContainer.style.display = 'none';
+        }, 300);
+        
+        // Also filter to show the full year when collapsed
+        selectTimePeriod(year);
+    } else {
+        // Expand this deck
+        console.log('Expanding deck');
+        monthContainer.style.display = 'flex';
+        yearTab.classList.add('expanded');
+        setTimeout(() => {
+            monthContainer.classList.add('expanded');
+        }, 10);
+        
+        // Filter to show the full year
+        selectTimePeriod(year);
+    }
 }
 
 // Select a time period
