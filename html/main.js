@@ -23,14 +23,16 @@ async function loadExpensesMain() {
     // Force sort to newest first on load
     setSortState({ column: 'date', direction: -1 });
     
+    // Don't render here - let initializeTimePeriods handle the initial render
+    // This ensures consistency with "All Time" behavior
+    
     // Apply initial sorting (by date, newest first)
     applyColumnFilters();
     
     // Update sort arrows to reflect current state
     updateSortArrows();
     
-    // Render components (this handles all spending calculations and averages)
-    renderExpenses(expenses);
+    // Render filters and charts (but not expenses table)
     renderFilters(expenses);
     renderCharts(expenses);
 }
@@ -83,6 +85,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     await loadExpensesMain();
     
     // Initialize time period tabs after data is loaded
+    // This will set the default to "All Time" which should match the initial load
     await initializeTimePeriods();
 });
 

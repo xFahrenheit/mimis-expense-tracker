@@ -10,7 +10,6 @@ export function renderExpenses(expenses) {
     // Render additional UI components
     renderAverages(expenses);
     renderQuickFilterChips(allExpenses);
-    renderRecentLargeExpenses(expenses);
     
     const tbody = document.getElementById('expensesTableBody');
     if (!tbody) return;
@@ -192,20 +191,6 @@ export function renderQuickFilterChips(expenses) {
         };
         chipDiv.appendChild(clearBtn);
     }
-}
-
-// Render recent large expenses
-export function renderRecentLargeExpenses(expenses) {
-    const block = document.getElementById('recentLargeBlock');
-    if (!block) return;
-    
-    const sorted = [...expenses].sort((a,b)=>Number(b.amount)-Number(a.amount));
-    const top3 = sorted.slice(0,3);
-    
-    block.innerHTML = '<div class="recent-large-title">Recent Large Expenses</div>'+
-        '<ul class="recent-large-list">'+
-        top3.map(e=>`<li><span class="recent-large-amt">$${Number(e.amount).toLocaleString(undefined,{maximumFractionDigits:2})}</span> <span class="recent-large-date">${e.date}</span> <span class="recent-large-desc">${e.description}</span></li>`).join('')+
-        '</ul>';
 }
 
 // Render averages
@@ -470,7 +455,7 @@ function renderExpenseRow(tbody, exp) {
         <td class="py-2 px-3 editable-cell" data-field="amount" data-id="${exp.id}">$${Number(exp.amount).toFixed(2)}</td>
         <td class="py-2 px-3 editable-cell" data-field="category" data-id="${exp.id}" style="text-align:center;">
             <span style="font-size:1.2em;vertical-align:middle;margin-right:4px;color:${meta.color};">${meta.icon}</span>
-            ${exp.category.charAt(0).toUpperCase()+exp.category.slice(1)}
+            ${(exp.category || 'shopping').charAt(0).toUpperCase()+(exp.category || 'shopping').slice(1)}
         </td>
         <td class="py-2 px-3 editable-cell" data-field="need_category" data-id="${exp.id}" style="text-align:center;"><span class="${needBadgeClass}">${needCat}</span></td>
         <td class="py-2 px-3 editable-cell" data-field="card" data-id="${exp.id}">${exp.card || ''}</td>
@@ -629,7 +614,7 @@ function setupInlineEditing(tbody, expenses) {
                 const meta = getCategoryMeta(value);
                 cell.innerHTML = `
                     <span style="font-size:1.2em;vertical-align:middle;margin-right:4px;color:${meta.color};">${meta.icon}</span>
-                    ${value.charAt(0).toUpperCase() + value.slice(1)}
+                    ${(value || 'shopping').charAt(0).toUpperCase() + (value || 'shopping').slice(1)}
                 `;
             } else if (field === 'need_category') {
                 let needBadgeClass = value === 'Luxury' ? 'luxury-badge' : 'need-badge';

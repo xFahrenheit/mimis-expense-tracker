@@ -44,64 +44,16 @@
   border-color: var(--zomp);
 }
 
-/* Recent Large Expenses Block */
-.recent-large-block {
-  background: linear-gradient(90deg, var(--platinum) 0%, var(--champagne-pink) 100%);
-  border-radius: 1.1rem;
-  box-shadow: 0 2px 8px 0 rgba(216, 226, 220, 0.10);
-  border: 1.5px solid var(--rosy-brown);
-  padding: 1.1rem 1.2rem 0.7rem 1.2rem;
-  margin-bottom: 1.1rem;
-  max-width: 420px;
-  margin-left: auto;
-  margin-right: auto;
-  position: relative;
-  z-index: 2;
-  font-size: 1.01em;
+.quick-chip.clear-chip {
+  background: #ffb3b3;
+  color: #8b0000;
+  border-color: #ff9999;
 }
 
-/* 12-month trend sparkline feature removed */
-
-.recent-large-title {
-  font-size: 1.08em;
-  font-weight: 700;
-  color: var(--rosy-brown);
-  margin-bottom: 0.4em;
-}
-.recent-large-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  width: 100%;
-}
-.recent-large-list li {
-  display: flex;
-  align-items: center;
-  gap: 1.1em;
-  margin-bottom: 0.3em;
-  padding-bottom: 0.2em;
-  border-bottom: 1px dashed var(--platinum);
-}
-.recent-large-list li:last-child {
-  border-bottom: none;
-}
-.recent-large-amt {
-  font-weight: 700;
-  color: var(--rosy-brown);
-  font-size: 1.08em;
-}
-.recent-large-date {
-  color: var(--dim-gray);
-  font-size: 0.97em;
-}
-.recent-large-desc {
-  color: var(--davys-gray);
-  font-size: 0.97em;
-  flex: 1 1 0%;
-  min-width: 0;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
+.quick-chip.clear-chip:hover {
+  background: #ff9999;
+  color: #660000;
+  border-color: #ff7777;
 }
 
 /* Sticky Table Header */
@@ -181,6 +133,18 @@ body.dark .quick-chip {
 body.dark .quick-chip.active, body.dark .quick-chip:hover {
   background: var(--zomp);
   color: #fff;
+}
+
+body.dark .quick-chip.clear-chip {
+  background: #663333;
+  color: #ffb3b3;
+  border-color: #994d4d;
+}
+
+body.dark .quick-chip.clear-chip:hover {
+  background: #804040;
+  color: #ffcccc;
+  border-color: #b36666;
 }
 body.dark #expensesTable thead th {
   background: #23272e !important;

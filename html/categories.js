@@ -309,7 +309,9 @@ export function getCategoryMeta(category) {
 
 // Get formatted category display with icon
 export function getCategoryDisplay(category) {
-    const meta = getCategoryMeta(category);
-    const catName = category.charAt(0).toUpperCase() + category.slice(1);
+    // If category is null/empty, default to 'shopping'
+    let actualCategory = category || 'shopping';
+    const meta = getCategoryMeta(actualCategory);
+    const catName = actualCategory.charAt(0).toUpperCase() + actualCategory.slice(1);
     return `<span style="font-size:1.2em;vertical-align:middle;margin-right:4px;color:${meta.color};">${meta.icon}</span>${catName}`;
 }
