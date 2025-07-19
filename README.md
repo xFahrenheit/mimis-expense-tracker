@@ -14,7 +14,7 @@ A beautiful, secure expense tracking application with multi-user support and ban
 ### Installation
 ```bash
 # Clone the repository
-git clone <your-repo-url>
+git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
 cd expense_tracker
 
 # Install dependencies
@@ -42,7 +42,7 @@ Open `http://localhost:5000` in your browser and start tracking expenses!
 ### Second User Setup
 ```bash
 # Clone the shared repository
-git clone <shared-repo-url>
+git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
 cd expense_tracker
 
 # Install dependencies
