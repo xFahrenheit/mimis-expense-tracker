@@ -163,21 +163,3 @@ The system supports multiple bank statement formats. To add support for a new ba
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Chart.js for beautiful data visualizations
-- Tailwind CSS for utility-first styling
-- Flask community for excellent documentation
-- PDFplumber for robust PDF parsing
-
-## 📞 Support
-
-If you encounter any issues or have questions, please open an issue on GitHub.
-
----
-
-**Made with ❤️ for personal finance management**
