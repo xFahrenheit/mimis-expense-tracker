@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime, timedelta
 from flask import jsonify, request, session
 from .database_service import get_db_connection
+from .encryption_service import create_user_encryption_keys, SecureDataManager
+import base64
 
 def hash_password(password):
     """Hash password with salt for security"""
@@ -25,7 +27,7 @@ def generate_session_token():
     return secrets.token_urlsafe(32)
 
 def register_user(email, password, full_name):
-    """Register a new user"""
+    """Register a new user with encryption setup"""
     if len(password) < 6:
         return jsonify({'success': False, 'error': 'Password must be at least 6 characters'})
     
@@ -36,13 +38,14 @@ def register_user(email, password, full_name):
         return jsonify({'success': False, 'error': 'Full name required'})
     
     password_hash = hash_password(password)
+    encryption_key, salt = create_user_encryption_keys(password)
     
     try:
         with get_db_connection() as conn:
             conn.execute('''
-                INSERT INTO users (email, password_hash, full_name)
-                VALUES (?, ?, ?)
-            ''', (email.lower().strip(), password_hash, full_name.strip()))
+                INSERT INTO users (email, password_hash, full_name, encryption_salt)
+                VALUES (?, ?, ?, ?)
+            ''', (email.lower().strip(), password_hash, full_name.strip(), salt))
             conn.commit()
         return jsonify({'success': True, 'message': 'Account created successfully'})
     except sqlite3.IntegrityError:
@@ -52,7 +55,7 @@ def login_user(email, password):
     """Login user and create session"""
     with get_db_connection() as conn:
         cur = conn.execute('''
-            SELECT id, password_hash, full_name, is_active
+            SELECT id, password_hash, full_name, is_active, encryption_salt
             FROM users WHERE email = ?
         ''', (email.lower().strip(),))
         user = cur.fetchone()
@@ -67,6 +70,9 @@ def login_user(email, password):
         session_token = generate_session_token()
         expires_at = datetime.now() + timedelta(days=30)  # 30 day session
         
+        # Generate encryption key for this session
+        encryption_key = SecureDataManager.derive_key_from_password(password, user[4])
+        
         conn.execute('''
             INSERT INTO user_sessions (user_id, session_token, expires_at)
             VALUES (?, ?, ?)
@@ -80,7 +86,8 @@ def login_user(email, password):
                 'email': email.lower().strip(),
                 'full_name': user[2]
             },
-            'session_token': session_token
+            'session_token': session_token,
+            'encryption_key': base64.urlsafe_b64encode(encryption_key).decode()
         })
 
 def logout_user(session_token):

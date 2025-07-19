@@ -7,7 +7,7 @@ import { initializeCategories } from './categories.js';
 import { applyColumnFilters, attachFilterAndSortListeners, updateSortArrows } from './filters.js';
 import { exportFilteredToCSV, setupDarkModeToggle, setupAnalyticsToggle, setupNotesArea } from './helpers.js';
 import { renderExpenses, renderFilters, renderStatements, calculateSpendingTotals, updateAllSpendingDisplays } from './render.js';
-import { attachDeleteAllBtnListener, setupTabSwitching } from './dom_handlers.js';
+import { attachDeleteAllBtnListener, setupTabSwitching, setupUploadForm } from './dom_handlers.js';
 import { createTimePeriodTabs, initializeTimePeriods } from './time_periods.js';
 import { USER_CONFIG, loadHouseholdConfig } from './user-config.js';
 import { showHouseholdModal } from './household-manager.js';
@@ -195,33 +195,70 @@ function initializeAppTitle() {
     });
 }
 
-// Main load function for expenses (updated for client-side)
-async function loadExpensesMain() {
-    const currentUser = auth.getCurrentUser();
-    if (!currentUser) return;
+// Updated initialize function
+async function initialize() {
+    // Initialize authentication first
+    await initializeAuth();
     
-    const expenses = await db.getExpenses(currentUser.id);
-    setAllExpenses(expenses);
-    setFilteredExpenses(expenses);
-    
-    // Force sort to newest first on load
-    setSortState({ column: 'date', direction: -1 });
-    
-    renderExpenses();
-    updateAllSpendingDisplays();
-    calculateSpendingTotals();
+    // Only initialize the rest if user is logged in
+    if (auth.isLoggedIn()) {
+        initializeSpendingBlocks();
+        initializeAppTitle();
+        initializeDataManagement();
+        
+        await loadHouseholdConfig();
+        
+        initializeCategories();
+        
+        renderFilters();
+        attachFilterAndSortListeners();
+        updateSortArrows();
+        setupDarkModeToggle();
+        setupAnalyticsToggle();
+        
+        setupTabSwitching();
+        setupNotesArea();
+        
+        // Modified handlers for client-side
+        setupUploadFormClientSide();
+        attachDeleteAllBtnListener();
+        
+        // Initialize time periods
+        initializeTimePeriods();
+        createTimePeriodTabs();
+        
+        document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
+            import('./category-modal.js').then(module => {
+                module.showCategoryModal();
+            });
+        });
+        
+        document.getElementById('householdManagerBtn').addEventListener('click', showHouseholdModal);
+        
+        document.getElementById('exportCsvBtn').addEventListener('click', exportFilteredToCSV);
+    }
+}
 
-    // Load statements for the statements table (client-side version)
-    const statements = await db.getStatements(currentUser.id);
-    renderStatements(statements);
+// Initialize dynamic spending blocks based on user configuration
+function initializeSpendingBlocks() {
+    const container = document.getElementById('spendingBlocksContainer');
+    if (!container) return;
     
-    // Apply initial sorting and filters
-    applyColumnFilters();
-    updateSortArrows();
-    
-    // Render filters and charts
-    renderFilters(expenses);
-    renderCharts(expenses);
+    container.innerHTML = USER_CONFIG.spendingBlocks.map(block => `
+        <div class="flex flex-col items-center md:items-start">
+            <div class="total-spending-label">${block.emoji} ${block.label}</div>
+            <div id="${block.id}" class="total-spending-value">$0</div>
+        </div>
+    `).join('');
+}
+
+// Initialize the app title
+function initializeAppTitle() {
+    document.title = USER_CONFIG.appTitle;
+    const titleElements = document.querySelectorAll('.app-title');
+    titleElements.forEach(el => {
+        el.textContent = USER_CONFIG.appTitle;
+    });
 }
 
 // Modified upload form for client-side processing
@@ -285,48 +322,45 @@ function setupUploadFormClientSide() {
     });
 }
 
-// Updated initialize function
-async function initialize() {
-    // Initialize authentication first
-    await initializeAuth();
+// Start the application
+initialize();
+
+// Initialize the app title
+function initializeAppTitle() {
+    document.title = USER_CONFIG.appTitle;
+    const titleElements = document.querySelectorAll('.app-title');
+    titleElements.forEach(el => {
+        el.textContent = USER_CONFIG.appTitle;
+    });
+}
+
+// Main load function for expenses (updated for client-side)
+async function loadExpensesMain() {
+    const currentUser = auth.getCurrentUser();
+    if (!currentUser) return;
     
-    // Only initialize the rest if user is logged in
-    if (auth.isLoggedIn()) {
-        initializeSpendingBlocks();
-        initializeAppTitle();
-        initializeDataManagement();
-        
-        await loadHouseholdConfig();
-        
-        initializeCategories();
-        
-        renderFilters();
-        attachFilterAndSortListeners();
-        updateSortArrows();
-        setupDarkModeToggle();
-        setupAnalyticsToggle();
-        
-        setupTabSwitching();
-        setupNotesArea();
-        
-        // Modified handlers for client-side
-        setupUploadFormClientSide();
-        attachDeleteAllBtnListener();
-        
-        // Initialize time periods
-        initializeTimePeriods();
-        createTimePeriodTabs();
-        
-        document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
-            import('./category-modal.js').then(module => {
-                module.showCategoryModal();
-            });
-        });
-        
-        document.getElementById('householdManagerBtn').addEventListener('click', showHouseholdModal);
-        
-        document.getElementById('exportCsvBtn').addEventListener('click', exportFilteredToCSV);
-    }
+    const expenses = await db.getExpenses(currentUser.id);
+    setAllExpenses(expenses);
+    setFilteredExpenses(expenses);
+    
+    // Force sort to newest first on load
+    setSortState({ column: 'date', direction: -1 });
+    
+    renderExpenses();
+    updateAllSpendingDisplays();
+    calculateSpendingTotals();
+
+    // Load statements for the statements table (client-side version)
+    const statements = await db.getStatements(currentUser.id);
+    renderStatements(statements);
+    
+    // Apply initial sorting and filters
+    applyColumnFilters();
+    updateSortArrows();
+    
+    // Render filters and charts
+    renderFilters(expenses);
+    renderCharts(expenses);
 }
 
 // Update spending summary blocks (client-side version)
@@ -334,9 +368,26 @@ function updateSpendingBlocks(expenses) {
     // Use the single source of truth function
     updateAllSpendingDisplays(expenses);
 }
+    
+    // Don't render here - let initializeTimePeriods handle the initial render
+    // This ensures consistency with "All Time" behavior
+    
+    // Apply initial sorting (by date, newest first)
+    applyColumnFilters();
+    
+    // Update sort arrows to reflect current state
+    updateSortArrows();
+    
+    // Render filters and charts (but not expenses table)
+    renderFilters(expenses);
+    renderCharts(expenses);
+}
 
-// Start the application
-initialize();
+// Update spending summary blocks (client-side version)
+function updateSpendingBlocks(expenses) {
+    // Use the single source of truth function
+    updateAllSpendingDisplays(expenses);
+}
 
 // Make category functions available globally for HTML onclick handlers
 window.editCategoryEmoji = async (categoryName, currentEmoji) => {

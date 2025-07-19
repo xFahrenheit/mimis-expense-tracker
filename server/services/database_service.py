@@ -35,17 +35,11 @@ def init_db():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date TEXT,
-                description TEXT,
-                amount REAL,
-                category TEXT,
-                need_category TEXT,
-                card TEXT,
-                who TEXT,
-                notes TEXT,
-                split_cost INTEGER DEFAULT 0,
-                outlier INTEGER DEFAULT 0,
+                user_id INTEGER NOT NULL,
+                encrypted_data TEXT NOT NULL,
                 statement_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id),
                 FOREIGN KEY(statement_id) REFERENCES statements(id)
             )
         ''')
@@ -76,6 +70,7 @@ def init_db():
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 full_name TEXT NOT NULL,
+                encryption_salt BLOB NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_active BOOLEAN DEFAULT 1
             )

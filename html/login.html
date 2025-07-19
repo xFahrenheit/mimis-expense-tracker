@@ -159,9 +159,10 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    // Store session token
+                    // Store session token and encryption key
                     localStorage.setItem('session_token', result.session_token);
                     localStorage.setItem('user', JSON.stringify(result.user));
+                    localStorage.setItem('encryption_key', result.encryption_key);
                     
                     // Redirect to main app
                     window.location.href = '/index.html';
