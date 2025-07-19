@@ -12,46 +12,32 @@ This expense tracker uses encrypted database sharing to ensure maximum security.
 
 ### Daily Workflow
 
-#### When you want to upload your changes:
-```bash
-# 1. Stop the Flask server
-# 2. Sync and encrypt your database
-./db_manager.sh encrypt
+#### Simple Two-Command Workflow:
 
-# 3. Commit and push (follow the prompts)
-git add expense_tracker_encrypted.db
-git commit -m "Update expenses $(date +%Y-%m-%d)"
-git push
-```
-
-#### When you want to get updates:
+**Start your session:**
 ```bash
-# 1. Sync with remote
 ./db_manager.sh sync
-
-# 2. Start the Flask server
-cd server && python app.py
+# This will:
+# 1. Pull latest changes from GitHub
+# 2. Decrypt the database
+# 3. Start the Flask server automatically
 ```
 
-#### If both of you edited simultaneously:
+**End your session:**
 ```bash
-# 1. Use sync to get both versions
-./db_manager.sh sync
-
-# 2. You'll have:
-#    - server/expense_tracker.db (your version)
-#    - server/expense_tracker.db.remote (their version)
-#    - Automatic backups in db_backups/
-
-# 3. Manually merge the data you want to keep
-#    (Use SQLite browser or the web interface)
-
-# 4. Upload your merged version
-./db_manager.sh encrypt
-git add expense_tracker_encrypted.db
-git commit -m "Merge expenses"
-git push
+# Stop Flask server with Ctrl+C
+./db_manager.sh upload
+# This will:
+# 1. Create automatic backup
+# 2. Check for conflicts
+# 3. Encrypt the database
+# 4. Commit and push to GitHub
 ```
+
+#### If conflicts occur:
+The `upload` command will warn you if someone else has uploaded changes since your last sync. You can choose to:
+- Cancel and sync first to get their changes
+- Proceed anyway (your changes will overwrite theirs)
 
 ## Security Features
 

@@ -152,32 +152,21 @@ This expense tracker includes a secure system for sharing your financial data be
 
 #### Daily Workflow
 
-**To upload your changes:**
+**To start your session:**
 ```bash
-# Stop Flask server first
-./db_manager.sh encrypt
-git add expense_tracker_encrypted.db
-git commit -m "Update expenses $(date +%Y-%m-%d)"
-git push
+./db_manager.sh sync  # Pull latest + start server automatically
 ```
 
-**To get other person's changes:**
+**To end your session:**
 ```bash
-./db_manager.sh sync
-cd server && python app.py
-```
-
-**If both edit simultaneously:**
-```bash
-./db_manager.sh sync  # Downloads both versions
-# Manually merge using web interface or SQLite tools
-./db_manager.sh encrypt  # Upload merged version
+# Stop Flask server (Ctrl+C)
+./db_manager.sh upload  # Encrypt + commit + push automatically
 ```
 
 #### Database Manager Commands
-- `./db_manager.sh encrypt` - Encrypt database for upload
-- `./db_manager.sh decrypt` - Decrypt database for use
-- `./db_manager.sh sync` - Download latest + handle conflicts
+- `./db_manager.sh sync` - Pull latest changes and start server
+- `./db_manager.sh upload` - Encrypt and upload your changes
+- `./db_manager.sh status` - Show database information  
 - `./db_manager.sh backup` - Create manual backup
 
 📖 **See `DATABASE_SECURITY.md` for detailed security documentation**
