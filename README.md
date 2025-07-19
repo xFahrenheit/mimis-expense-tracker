@@ -59,7 +59,6 @@ pip install -r server/requirements.txt
 - **Starting session:** Run `./db_manager.sh sync` (pulls updates and starts server)
 - **Adding expenses:** Use web interface normally
 - **Sharing changes:** Click "Save & Push" backup button in web interface (encrypts and uploads to shared repo)
-- **Getting updates:** Run `./db_manager.sh sync`
 
 ## ✨ Key Features
 
