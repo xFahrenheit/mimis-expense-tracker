@@ -510,7 +510,20 @@ function setupManualEntryListeners(addTr) {
         }
         
         await addExpense({ date, description, amount, category, need_category, card, who, split_cost, outlier, notes });
-        if (window.loadExpenses) window.loadExpenses();
+        
+        // Reload data and refresh table
+        if (window.loadExpenses) {
+            await window.loadExpenses();
+        }
+        if (window.applyColumnFilters) {
+            window.applyColumnFilters();
+        }
+        
+        // Clear the form
+        addTr.querySelector('.add-date').value = '';
+        addTr.querySelector('.add-description').value = '';
+        addTr.querySelector('.add-amount').value = '';
+        addTr.querySelector('.add-notes').value = '';
     });
 }
 
@@ -528,6 +541,13 @@ function setupRowListeners(tr, exp) {
     if (splitCb) {
         splitCb.addEventListener('change', async () => {
             await updateExpenseField(exp.id, 'split_cost', splitCb.checked);
+            // Reload data to ensure consistency
+            if (window.loadExpenses) {
+                await window.loadExpenses();
+            }
+            if (window.applyColumnFilters) {
+                window.applyColumnFilters();
+            }
         });
     }
     
@@ -535,6 +555,13 @@ function setupRowListeners(tr, exp) {
     if (outlierCb) {
         outlierCb.addEventListener('change', async () => {
             await updateExpenseField(exp.id, 'outlier', outlierCb.checked);
+            // Reload data to ensure consistency
+            if (window.loadExpenses) {
+                await window.loadExpenses();
+            }
+            if (window.applyColumnFilters) {
+                window.applyColumnFilters();
+            }
         });
     }
     
@@ -544,7 +571,14 @@ function setupRowListeners(tr, exp) {
         deleteBtn.addEventListener('click', async (e) => {
             if (confirm('Delete this row?')) {
                 await deleteExpense(exp.id);
-                if (window.applyColumnFilters) window.applyColumnFilters();
+                // Reload data from server to ensure consistency
+                if (window.loadExpenses) {
+                    await window.loadExpenses();
+                }
+                // Reapply filters to refresh the table
+                if (window.applyColumnFilters) {
+                    window.applyColumnFilters();
+                }
             }
             e.stopPropagation();
         });
@@ -646,27 +680,14 @@ function setupInlineEditing(tbody, expenses) {
             if (filteredExp) filteredExp[field] = value;
         }
         
-        // Update spending totals only if amount changed, and do it silently
-        if (field === 'amount') {
-            const { total, gautami, ameya, splitTotal } = calculateSpendingTotals(window.filteredExpenses);
-            const days = new Set(window.filteredExpenses.map(e => e.date)).size || 1;
-            const months = new Set(window.filteredExpenses.map(e => (e.date||'').slice(0,7))).size || 1;
-            const formatCurrency = (amount) => `$${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            
-            // Update spending displays directly without triggering any re-renders
-            const elements = {
-                'totalSpendingValue': formatCurrency(total),
-                'gautamiSpendingValue': formatCurrency(gautami),
-                'ameyaSpendingValue': formatCurrency(ameya),
-                'splitSpendingValue': formatCurrency(splitTotal / 2),
-                'avgPerDay': `${formatCurrency(total / days).replace('$', '')}/day`,
-                'avgPerMonth': `${formatCurrency(total / months).replace('$', '')}/mo`
-            };
-            
-            Object.entries(elements).forEach(([id, text]) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = text;
-            });
+        // Reload data from server to ensure consistency after edits
+        if (window.loadExpenses) {
+            await window.loadExpenses();
+        }
+        
+        // Update spending totals and refresh displays
+        if (window.applyColumnFilters) {
+            window.applyColumnFilters();
         }
         
         // If called from inline edit, close the cell after update
@@ -856,6 +877,11 @@ async function handleBulkDelete(button) {
     
     try {
         await bulkDeleteExpenses(selectedIds);
+        
+        // Reload data from server to ensure consistency
+        if (window.loadExpenses) {
+            await window.loadExpenses();
+        }
         
         // Clear all checkboxes immediately to avoid stale state
         const checkboxes = document.querySelectorAll('.autofill-row-checkbox, .autofill-header-checkbox');

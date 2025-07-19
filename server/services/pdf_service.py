@@ -14,6 +14,7 @@ def parse_pdf(filepath, bank_type='generic'):
         'discover': parse_discover_statement,
         'amex': parse_amex_statement,
         'citi': parse_citi_statement,
+        'venturex': parse_venturex_statement,
         'generic': parse_generic_statement
     }
     
@@ -340,6 +341,175 @@ def parse_citi_statement(filepath):
     print(f"Citi parser found {len(rows)} transactions")
     return pd.DataFrame(rows) if rows else None
 
+def parse_venturex_statement(filepath):
+    """
+    Parse Capital One Venture X statements
+    VentureX typically has transactions in a specific format:
+    - Multiple cardholders (AMEYA GODBOLE #1646, GAUTAMI LANGARKANDE #1153)
+    - Trans Date | Post Date | Description | Amount format
+    - Separate sections for each cardholder
+    """
+    rows = []
+    
+    with pdfplumber.open(filepath) as pdf:
+        all_text = "\n".join(page.extract_text() or '' for page in pdf.pages)
+        lines = all_text.splitlines()
+        
+        print(f"VentureX parser processing {len(lines)} lines")
+        print('--- VentureX sample (first 30 lines) ---')
+        for i, l in enumerate(lines[:30]):
+            print(f"{i:2d}: {repr(l)}")
+        print('--- End of VentureX Sample ---')
+        
+        # Track current cardholder and transaction state
+        current_cardholder = None
+        in_transaction_section = False
+        current_section_type = None  # Track if we're in 'transactions' or 'payments'
+        
+        # Patterns for detecting cardholder sections
+        cardholder_pattern = r'([A-Z][A-Z\s]+[A-Z])\s*#\d+:\s*(Transactions|Payments|Credits)'
+        
+        # VentureX transaction patterns - handle both positive and negative amounts
+        transaction_patterns = [
+            # VentureX multi-column format: Trans Date Post Date Description Amount (with optional negative sign)
+            r'^([A-Z][a-z]{2} \d{1,2})\s+([A-Z][a-z]{2} \d{1,2})\s+(.+?)\s+([-]?\s*\$?[\d,]+\.?\d{2})$',
+            # Standard date formats as fallback
+            r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+([-]?\s*\$?[\d,]+\.?\d{2})$',
+            r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([-]?\s*\$?[\d,]+\.?\d{2})$',
+        ]
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check for cardholder section headers
+            cardholder_match = re.search(cardholder_pattern, line, re.IGNORECASE)
+            if cardholder_match:
+                cardholder_name = cardholder_match.group(1).strip()
+                section_type = cardholder_match.group(2).lower()
+                
+                # Extract just the first name (first word of the name)
+                first_name = cardholder_name.split()[0].title()
+                
+                if 'transaction' in section_type:
+                    current_cardholder = first_name
+                    current_section_type = 'transactions'
+                    in_transaction_section = True
+                    print(f"Found cardholder transaction section: {first_name}")
+                elif 'payment' in section_type or 'credit' in section_type:
+                    current_cardholder = first_name
+                    current_section_type = 'payments'
+                    in_transaction_section = True
+                    print(f"Found cardholder payments/credits section: {first_name}")
+                continue
+            
+            # Check for transaction table headers
+            if 'trans date' in line.lower() and 'post date' in line.lower():
+                in_transaction_section = True
+                print(f"Found transaction table header at line {i}")
+                continue
+            
+            # Skip if we're not in a transaction section
+            if not in_transaction_section:
+                continue
+            
+            # Skip obvious non-transaction lines
+            skip_patterns = [
+                r'account summary|payment information|balance|payment due',
+                r'late payment warning|minimum payment warning',
+                r'fees charged|interest charged|cash advances',
+                r'trans date|post date|description|amount',  # Header lines
+                r'^\s*$|^-+$|^\*+$',  # Empty/separator lines
+            ]
+            
+            if any(re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns):
+                continue
+            
+            # Try to match transaction patterns
+            transaction_found = False
+            for pattern_idx, pattern in enumerate(transaction_patterns):
+                match = re.match(pattern, line)
+                if match:
+                    try:
+                        groups = match.groups()
+                        
+                        if pattern_idx == 0 and len(groups) == 4:
+                            # VentureX format: Trans Date, Post Date, Description, Amount
+                            trans_date, post_date, description, amount_str = groups
+                            date_str = trans_date  # Use transaction date
+                        elif len(groups) == 3:
+                            # Standard format: Date, Description, Amount
+                            date_str, description, amount_str = groups
+                        else:
+                            continue
+                        
+                        # Parse date
+                        date = parse_flexible_date(date_str)
+                        if not date:
+                            continue
+                        
+                        # Parse amount - handle negative values properly
+                        amount_str_clean = re.sub(r'[^\d.-]', '', amount_str.replace(' ', ''))
+                        amount = float(amount_str_clean)
+                        
+                        # Determine if this is a credit or debit based on section and amount sign
+                        is_credit = False
+                        if current_section_type == 'payments':
+                            # In payments section, negative amounts are credits (payments made)
+                            if amount < 0:
+                                is_credit = True
+                                amount = abs(amount)  # Store as positive, but mark as credit
+                            else:
+                                # Positive amounts in payments section are unusual but could be fees
+                                pass
+                        else:
+                            # In transactions section, all amounts are spending (positive)
+                            amount = abs(amount)
+                        
+                        # Skip zero amounts or invalid descriptions
+                        if amount <= 0 or len(description.strip()) < 3:
+                            continue
+                        
+                        # Create transaction record
+                        transaction = {
+                            'date': date,
+                            'description': description.strip(),
+                            'amount': amount,
+                            'card': 'Venture X'
+                        }
+                        
+                        # Add cardholder info if available
+                        if current_cardholder:
+                            transaction['who'] = current_cardholder
+                        
+                        # Add notes for credits/payments
+                        if is_credit:
+                            transaction['notes'] = 'Credit/Payment'
+                            transaction['amount'] = -amount  # Store as negative for credits
+                        
+                        rows.append(transaction)
+                        
+                        credit_indicator = " (CREDIT)" if is_credit else ""
+                        print(f"Found transaction: {date} | {current_cardholder or 'Unknown'} | {description.strip()[:30]}... | ${amount}{credit_indicator}")
+                        transaction_found = True
+                        break
+                        
+                    except Exception as e:
+                        print(f"Error parsing transaction line: {line}, Error: {e}")
+                        continue
+            
+            # Handle multi-line transactions (like Turkish Airlines example)
+            if not transaction_found and current_cardholder and in_transaction_section:
+                # Check if this might be a continuation line
+                if i > 0 and len(line) > 10 and not re.match(r'^[A-Z][a-z]{2} \d{1,2}', line):
+                    # This might be a continuation of the previous transaction
+                    # For now, we'll skip these, but they could be handled by looking back
+                    pass
+    
+    print(f"VentureX parser found {len(rows)} transactions")
+    return pd.DataFrame(rows) if rows else None
+
 def parse_generic_statement(filepath):
     """
     Generic parser for unknown formats - uses table extraction and regex fallback
@@ -348,8 +518,13 @@ def parse_generic_statement(filepath):
     rows = []
     
     with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
+        print(f"PDF has {len(pdf.pages)} pages")
+        
+        for page_num, page in enumerate(pdf.pages):
+            print(f"Processing page {page_num + 1}")
             tables = page.extract_tables()
+            print(f"Found {len(tables)} tables on page {page_num + 1}")
+            
             for table in tables:
                 if not table or len(table) < 2:
                     continue
@@ -365,11 +540,14 @@ def parse_generic_statement(filepath):
                     continue
                 
                 headers = [str(h or '').lower().strip() for h in table[header_row]]
+                print(f"Table headers: {headers}")
                 
                 # Find column indices
                 date_idx = next((i for i, h in enumerate(headers) if 'date' in h), None)
                 desc_idx = next((i for i, h in enumerate(headers) if any(word in h for word in ['desc', 'merchant', 'detail'])), None)
                 amount_idx = next((i for i, h in enumerate(headers) if any(word in h for word in ['amount', 'debit', 'credit'])), None)
+                
+                print(f"Column indices - Date: {date_idx}, Description: {desc_idx}, Amount: {amount_idx}")
                 
                 if all(idx is not None for idx in [date_idx, desc_idx, amount_idx]):
                     for row in table[header_row+1:]:
@@ -438,22 +616,46 @@ def parse_regex_fallback(filepath):
         all_text = "\n".join(page.extract_text() or '' for page in pdf.pages)
         lines = all_text.splitlines()
         
-        print('--- Generic regex fallback (first 10 lines) ---')
-        for l in lines[:10]:
-            print(l)
+        print('--- Generic regex fallback (first 15 lines) ---')
+        for l in lines[:15]:
+            print(repr(l))
         print('--- End of Sample ---')
         
-        # Try various patterns
+        # Try various patterns - improved for VentureX and other formats
         patterns = [
+            # Standard patterns
             r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
             r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
             r'^([A-Z]{3} \d{1,2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
-            r'^(\d{4}-\d{2}-\d{2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$'
+            r'^(\d{4}-\d{2}-\d{2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
+            # Patterns with more flexible spacing
+            r'^(\d{1,2}/\d{1,2}/\d{2,4})\s{2,}(.+?)\s{2,}([-+]?\$?[\d,]+\.?\d{2})$',
+            r'^(\d{1,2}/\d{1,2})\s{2,}(.+?)\s{2,}([-+]?\$?[\d,]+\.?\d{2})$',
+            # Capital One/VentureX specific patterns
+            r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+\$?([\d,]+\.?\d{2})\s*$',
+            r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+\$?([\d,]+\.?\d{2})\s*$',
+            # Patterns for amounts without $ sign
+            r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([\d,]+\.?\d{2})\s*$',
+            r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([\d,]+\.?\d{2})\s*$'
+        ]
+        
+        # Skip lines that are clearly headers or summary info
+        skip_patterns = [
+            r'account summary|payment information|previous balance|new balance|minimum payment',
+            r'payment due|deadline|total|balance|summary|statement',
+            r'^\s*$|^-+$|^\*+$',  # Empty lines, dashes, asterisks
+            r'^\d+\s*$'  # Lines with just numbers
         ]
         
         for pattern in patterns:
             for line in lines:
-                match = re.match(pattern, line.strip())
+                line_stripped = line.strip()
+                
+                # Skip lines that match skip patterns
+                if any(re.search(skip_pattern, line_stripped, re.IGNORECASE) for skip_pattern in skip_patterns):
+                    continue
+                
+                match = re.match(pattern, line_stripped)
                 if match:
                     date_str, description, amount_str = match.groups()
                     try:
@@ -462,17 +664,21 @@ def parse_regex_fallback(filepath):
                             amount = float(re.sub(r'[^\d.-]', '', amount_str))
                             amount = abs(amount)
                             
-                            rows.append({
-                                'date': date,
-                                'description': description.strip(),
-                                'amount': amount,
-                                'card': 'Unknown'
-                            })
-                    except Exception:
+                            # Additional validation - skip if description is too short or looks like header
+                            if len(description.strip()) > 3 and not re.match(r'^(date|desc|amount|transaction)', description.lower()):
+                                rows.append({
+                                    'date': date,
+                                    'description': description.strip(),
+                                    'amount': amount,
+                                    'card': 'Unknown'
+                                })
+                    except Exception as e:
+                        print(f"Error parsing regex line: {line_stripped}, Error: {e}")
                         continue
             
             if rows:
-                break
+                print(f"Found {len(rows)} transactions with pattern: {pattern}")
+                break  # Stop at first successful pattern
     
     print(f"Regex fallback found {len(rows)} transactions")
     return pd.DataFrame(rows) if rows else pd.DataFrame()
