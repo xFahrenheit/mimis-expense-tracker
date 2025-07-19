@@ -46,7 +46,15 @@ if [ "$1" = "sync" ]; then
         
         # Decrypt the latest database
         echo "🔓 Decrypting database..."
-        openssl enc -aes-256-cbc -d -in "$ENCRYPTED_FILE" -out "$DB_FILE"
+        
+        # Check if password is provided via environment variable
+        if [ -n "$EXPENSE_DB_PASSWORD" ]; then
+            # Use password from environment variable (non-interactive)
+            echo "$EXPENSE_DB_PASSWORD" | openssl enc -aes-256-cbc -d -in "$ENCRYPTED_FILE" -out "$DB_FILE" -pass stdin
+        else
+            # Interactive password prompt (for manual use)
+            openssl enc -aes-256-cbc -d -in "$ENCRYPTED_FILE" -out "$DB_FILE"
+        fi
         
         if [ $? -eq 0 ]; then
             echo "✅ Database ready!"
@@ -87,7 +95,15 @@ elif [ "$1" = "upload" ]; then
     
     # Encrypt the database
     echo "🔒 Encrypting database..."
-    openssl enc -aes-256-cbc -salt -in "$DB_FILE" -out "$ENCRYPTED_FILE"
+    
+    # Check if password is provided via environment variable
+    if [ -n "$EXPENSE_DB_PASSWORD" ]; then
+        # Use password from environment variable (non-interactive)
+        echo "$EXPENSE_DB_PASSWORD" | openssl enc -aes-256-cbc -salt -in "$DB_FILE" -out "$ENCRYPTED_FILE" -pass stdin
+    else
+        # Interactive password prompt (for manual use)
+        openssl enc -aes-256-cbc -salt -in "$DB_FILE" -out "$ENCRYPTED_FILE"
+    fi
     
     if [ $? -eq 0 ]; then
         echo "✅ Database encrypted!"

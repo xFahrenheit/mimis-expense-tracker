@@ -185,17 +185,25 @@ def backup_and_push():
     import os
     
     try:
+        # Check if password environment variable is set
+        if 'EXPENSE_DB_PASSWORD' not in os.environ:
+            return jsonify({
+                'success': False,
+                'message': 'EXPENSE_DB_PASSWORD environment variable not set'
+            }), 400
+        
         # Change to the parent directory (where db_manager.sh is located)
         parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
-        # Run the upload command with proper environment
+        # Run the upload command with environment
         result = subprocess.run(
             ['bash', './db_manager.sh', 'upload'],
             cwd=parent_dir,
             capture_output=True,
             text=True,
-            timeout=60,  # Increased timeout for git operations
-            env=dict(os.environ, LC_ALL='C', LANG='C')  # Set proper locale
+            timeout=60,
+            env=dict(os.environ, LC_ALL='C', LANG='C'),
+            input='y\n'  # Auto-confirm any prompts
         )
         
         if result.returncode == 0:
@@ -215,7 +223,7 @@ def backup_and_push():
     except subprocess.TimeoutExpired:
         return jsonify({
             'success': False,
-            'message': 'Backup operation timed out (may require password input)'
+            'message': 'Backup operation timed out'
         }), 500
     except Exception as e:
         return jsonify({

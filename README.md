@@ -148,6 +148,7 @@ This expense tracker includes a secure system for sharing your financial data be
    cd server && pip install -r requirements.txt
    cd ..
    ./db_manager.sh decrypt  # Enter the shared password
+   ./setup_password.sh      # Set up backup button password
    ```
 
 #### Daily Workflow
