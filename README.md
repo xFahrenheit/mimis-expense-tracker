@@ -22,6 +22,8 @@ pip install -r server/requirements.txt
 
 # Start the application
 python server/app.py
+# OR use the sync command (pulls updates and starts server)
+./db_manager.sh sync
 ```
 
 Open `http://localhost:5000` in your browser and start tracking expenses!
@@ -33,8 +35,8 @@ Open `http://localhost:5000` in your browser and start tracking expenses!
 # Set up encryption password
 ./setup_password.sh
 
-# Encrypt and push to shared repository
-./db_manager.sh push
+# Encrypt and sync to shared repository
+./db_manager.sh sync
 ```
 
 ### Second User Setup
@@ -50,13 +52,14 @@ pip install -r server/requirements.txt
 ./setup_password.sh
 
 # Download and decrypt database
-./db_manager.sh pull
+./db_manager.sh sync
 ```
 
 ### Daily Workflow
+- **Starting session:** Run `./db_manager.sh sync` (pulls updates and starts server)
 - **Adding expenses:** Use web interface normally
-- **Sharing changes:** Click backup button in web interface OR run `./db_manager.sh push`
-- **Getting updates:** Run `./db_manager.sh pull`
+- **Sharing changes:** Click "Save & Push" backup button in web interface (encrypts and uploads to shared repo)
+- **Getting updates:** Run `./db_manager.sh sync`
 
 ## ✨ Key Features
 
