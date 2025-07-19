@@ -1,7 +1,10 @@
 import { allExpenses, filteredExpenses, sortState, setFilteredExpenses, setSortState } from './config.js';
 
 // Apply column filters and sorting
-export function applyColumnFilters() {
+export function applyColumnFilters(baseExpenses = null) {
+    // Use provided baseExpenses or fall back to allExpenses
+    const sourceExpenses = baseExpenses || allExpenses;
+    
     // Date range
     const dateFrom = document.getElementById('filter-date-from').value;
     const dateTo = document.getElementById('filter-date-to').value;
@@ -18,7 +21,7 @@ export function applyColumnFilters() {
     // Notes
     const notesVal = document.getElementById('filter-notes').value.toLowerCase();
     
-    const filtered = allExpenses.filter(e => {
+    const filtered = sourceExpenses.filter(e => {
         // Date range filter
         let dateOk = true;
         if (dateFrom && e.date) dateOk = e.date >= dateFrom;
@@ -48,7 +51,16 @@ export function applyColumnFilters() {
             if (sortState.column === 'date') {
                 v1 = v1 || '';
                 v2 = v2 || '';
-                return (v1.localeCompare(v2)) * sortState.direction;
+                // Convert dates to actual Date objects for proper sorting
+                const date1 = new Date(v1);
+                const date2 = new Date(v2);
+                
+                // Handle invalid dates
+                if (isNaN(date1.getTime()) && isNaN(date2.getTime())) return 0;
+                if (isNaN(date1.getTime())) return 1;
+                if (isNaN(date2.getTime())) return -1;
+                // Sort by actual date values
+                return (date1.getTime() - date2.getTime()) * sortState.direction;
             }
             if (v1 === undefined) v1 = '';
             if (v2 === undefined) v2 = '';
@@ -58,6 +70,12 @@ export function applyColumnFilters() {
     }
     
     setFilteredExpenses(filtered);
+    
+    // Debug: Log the first 10 dates after sorting
+    console.log('First 10 dates after sorting:');
+    filtered.slice(0, 10).forEach((exp, i) => {
+        console.log(`${i + 1}. ${exp.date} - ${exp.description?.substring(0, 30)}`);
+    });
     
     // Re-render components with filtered data
     if (window.renderExpenses) window.renderExpenses(filtered);

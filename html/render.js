@@ -301,13 +301,30 @@ function renderExpenseRow(tbody, exp) {
     const splitChecked = exp.split_cost ? 'checked' : '';
     const outlierChecked = exp.outlier ? 'checked' : '';
     
+    // Format date as yyyy-month-dd (but keep original date for sorting)
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '';
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return dateStr;
+            
+            const year = date.getFullYear();
+            const month = date.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
+            const day = String(date.getDate()).padStart(2, '0');
+            
+            return `${year}-${month}-${day}`;
+        } catch (error) {
+            return dateStr;
+        }
+    };
+    
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td class="py-2 px-3 text-center"><input type="checkbox" class="autofill-row-checkbox" data-id="${exp.id}" /></td>
         <td class="py-2 px-3 text-center">
             <button class="text-red-400 hover:text-red-600 font-bold text-lg delete-row-btn" data-id="${exp.id}" title="Delete">×</button>
         </td>
-        <td class="py-2 px-3 editable-cell" data-field="date" data-id="${exp.id}">${exp.date || ''}</td>
+        <td class="py-2 px-3 editable-cell" data-field="date" data-id="${exp.id}" data-sort-value="${exp.date || ''}">${formatDate(exp.date)}</td>
         <td class="py-2 px-3 editable-cell" data-field="description" data-id="${exp.id}">${exp.description || ''}</td>
         <td class="py-2 px-3 editable-cell" data-field="amount" data-id="${exp.id}">$${Number(exp.amount).toFixed(2)}</td>
         <td class="py-2 px-3 editable-cell" data-field="category" data-id="${exp.id}" style="text-align:center;">

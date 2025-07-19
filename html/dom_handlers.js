@@ -86,6 +86,18 @@ export function setupUploadForm() {
             uploadForm.reset();
             if (window.loadStatements) await window.loadStatements();
             if (window.loadExpenses) await window.loadExpenses();
+            
+            // Refresh time period tabs after successful upload
+            setTimeout(async () => {
+                try {
+                    if (window.createTimePeriodTabs) {
+                        await window.createTimePeriodTabs();
+                        console.log('Time period tabs refreshed after upload');
+                    }
+                } catch (error) {
+                    console.error('Error refreshing time period tabs:', error);
+                }
+            }, 1500);
         } else {
             alert('Upload failed. Please try again.');
         }

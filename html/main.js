@@ -7,7 +7,7 @@ import { applyColumnFilters, attachFilterAndSortListeners } from './filters.js';
 import { exportFilteredToCSV, setupDarkModeToggle, setupAnalyticsToggle, setupNotesArea } from './helpers.js';
 import { renderExpenses, renderFilters, renderStatements, renderQuickFilterChips, renderRecentLargeExpenses, renderAverages } from './render.js';
 import { attachDeleteAllBtnListener, setupTabSwitching, setupUploadForm, setupTextToSql } from './dom_handlers.js';
-// Temporarily removed: import { initializeTimePeriods, createTimePeriodTabs, getCurrentPeriodFilter } from './time_periods.js';
+import { createTimePeriodTabs } from './time_periods.js';
 
 // Register ChartDataLabels plugin globally
 if (window.Chart && window.ChartDataLabels) {
@@ -19,10 +19,6 @@ async function loadExpensesMain() {
     const expenses = await loadExpenses();
     setAllExpenses(expenses);
     setFilteredExpenses(expenses);
-    
-    // Initialize time periods (must be done after expenses are loaded)
-    // Temporarily disabled to fix table issue
-    // initializeTimePeriods();
     
     // Apply initial sorting (by date, newest first)
     applyColumnFilters();
@@ -39,6 +35,18 @@ async function loadExpensesMain() {
     renderAverages(expenses);
     renderQuickFilterChips(expenses);
     renderRecentLargeExpenses(expenses);
+    
+    console.log('Loaded', expenses.length, 'expenses');
+    
+    // Initialize time periods AFTER table is loaded and working
+    setTimeout(async () => {
+        try {
+            await createTimePeriodTabs();
+            console.log('Time period tabs created successfully');
+        } catch (error) {
+            console.error('Error creating time period tabs:', error);
+        }
+    }, 1000);
 }
 
 // Main load function for statements
@@ -184,3 +192,6 @@ window.renderCharts = renderCharts;
 window.renderFilters = renderFilters;
 window.applyColumnFilters = applyColumnFilters;
 window.updateSpendingBlocks = updateSpendingBlocks;
+
+// Expose time period functions
+window.createTimePeriodTabs = createTimePeriodTabs;

@@ -103,6 +103,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     </select>
                 </div>
 
+                <!-- Time Period Tabs -->
+                <div id="timePeriodTabs" class="glass-block p-4 mb-4">
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-purple-200">Filter by Time Period</h3>
+                            <button id="refreshPeriodsBtn" class="btn-pastel text-xs px-2 py-1">↻ Refresh</button>
+                        </div>
+                        <div id="periodTabsContainer" class="flex flex-wrap gap-2">
+                            <!-- Time period tabs will be dynamically generated here -->
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Expenses Table -->
                 <div class="glass-block mb-8 p-4 table-container">
                     <div class="flex justify-between items-center mb-2">

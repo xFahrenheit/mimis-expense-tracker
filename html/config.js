@@ -41,7 +41,7 @@ export const CHART_COLORS = [
 // Global state variables
 export let allExpenses = [];
 export let filteredExpenses = [];
-export let sortState = { column: 'date', direction: -1 }; // 1: asc, -1: desc (default: newest first)
+export let sortState = { column: 'date', direction: 1 }; // 1: asc, -1: desc (default: oldest first)
 
 // State setters (these mutate the exported variables)
 export const setAllExpenses = (expenses) => { 
