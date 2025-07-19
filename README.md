@@ -1,9 +1,3 @@
-# 💰 Expense Tracker
-
-A beautiful, secure expense tracking application with multi-user support and bank statement automation.
-
-![Expense Tracker](logo/Expense%20Tracker%20logo%20pixel%20art%20style%20girly.jpg)
-
 ## 🚀 Quick Start
 
 ### Prerequisites
