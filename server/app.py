@@ -21,10 +21,6 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- Endpoints ---
-@app.route('/text_to_sql', methods=['POST'])
-def text_to_sql():
-    return expense_service.text_to_sql(request)
-
 @app.route('/delete_all_expenses', methods=['DELETE'])
 def delete_all_expenses():
     return statement_service.delete_all_expenses()
@@ -146,6 +142,29 @@ def update_category(category_name):
         return jsonify({'success': True, 'message': f'Category "{name}" updated successfully'})
     else:
         return jsonify({'error': 'Category not found or update failed'}), 400
+
+@app.route('/categories/<category_name>', methods=['DELETE'])
+def delete_category(category_name):
+    name = category_name.lower().strip()
+    
+    if category_service.delete_custom_category(name):
+        return jsonify({'success': True, 'message': f'Category "{name}" deleted successfully'})
+    else:
+        return jsonify({'error': 'Category not found, is a default category, or delete failed'}), 400
+
+@app.route('/categories/<category_name>/rename', methods=['PATCH'])
+def rename_category(category_name):
+    data = request.get_json()
+    if not data or 'new_name' not in data:
+        return jsonify({'error': 'New category name is required'}), 400
+    
+    old_name = category_name.lower().strip()
+    new_name = data['new_name'].lower().strip()
+    
+    if category_service.rename_custom_category(old_name, new_name):
+        return jsonify({'success': True, 'message': f'Category "{old_name}" renamed to "{new_name}" successfully'})
+    else:
+        return jsonify({'error': 'Category not found, is a default category, new name already exists, or rename failed'}), 400
 
 @app.route('/cleanup', methods=['POST'])
 def cleanup_null_rows():

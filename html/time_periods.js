@@ -129,8 +129,10 @@ async function createTimePeriodTabs() {
 
         console.log(`Created ${1 + recentYears.length} main tabs with expandable months`);
         
-        // Update spending totals after creating tabs (with all expenses for "All Time" default)
-        updateSpendingTotals(expenses);
+        // Default to "All Time" and ensure it's properly selected
+        await selectTimePeriod('all-time');
+        
+        console.log('Time periods initialized with All Time default');
     } catch (error) {
         console.error('Error creating time period tabs:', error);
     }
@@ -284,10 +286,16 @@ async function filterExpensesByPeriod(period) {
             });
         }
 
-        // Update filtered expenses and re-render table
+        // Update the global filtered expenses state
         setFilteredExpenses(filteredExpenses);
         
-        // Apply sorting and other filters to the time-period filtered expenses
+        // Update quick filter chips based on time-period filtered data
+        if (window.renderQuickFilterChips) {
+            window.renderQuickFilterChips(filteredExpenses);
+        }
+        
+        // Apply column filters to the time-period filtered expenses
+        // This ensures any active column filters are maintained
         if (window.applyColumnFilters) {
             window.applyColumnFilters(filteredExpenses);
         } else {
@@ -347,6 +355,9 @@ function updateSpendingTotals(expenses) {
 // Initialize time periods when expenses are loaded
 async function initializeTimePeriods() {
     try {
+        // Reset to default state on initialization
+        currentPeriodFilter = 'all-time';
+        
         await createTimePeriodTabs();
         
         // Set up refresh button
@@ -357,7 +368,7 @@ async function initializeTimePeriods() {
             });
         }
         
-        console.log('Time periods initialized successfully');
+        console.log('Time periods initialized successfully with All Time default');
     } catch (error) {
         console.error('Error initializing time periods:', error);
     }
@@ -368,13 +379,15 @@ function getCurrentPeriodFilter() {
     return currentPeriodFilter || 'all-time';
 }
 
-// Make functions available globally for upload handler
+// Export for use by other modules
+export { 
+    initializeTimePeriods,
+    createTimePeriodTabs, 
+    selectTimePeriod, 
+    getCurrentPeriodFilter 
+};
+
+// Make functions available globally for upload handler and chips
 window.createTimePeriodTabs = createTimePeriodTabs;
 window.selectTimePeriod = selectTimePeriod;
-
-export {
-    initializeTimePeriods,
-    createTimePeriodTabs,
-    selectTimePeriod,
-    getCurrentPeriodFilter
-};
+window.getCurrentPeriodFilter = getCurrentPeriodFilter;

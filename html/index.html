@@ -113,7 +113,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     <table id="expensesTable">
                         <thead>
                             <tr class="text-purple-200">
-                                <th class="py-2 px-3 w-10"></th>
+                                <th class="py-2 px-3 w-10 text-center">
+                                    <input type="checkbox" id="selectAllCheckbox" title="Select all rows">
+                                </th>
                                 <th class="py-2 px-3 w-32 cursor-pointer" id="th-date"><div class="flex items-center gap-1"><span>Date</span><span id="sort-date" class="ml-1 filter-arrow" data-filter="date"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
                                     <div id="filterbar-date" class="filterbar" style="display:none">
                                         <input type="date" id="filter-date-from" class="w-20 mt-1 px-1 py-0.5 rounded text-xs" placeholder="From" />
@@ -174,6 +176,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             <!-- Expenses will be populated here -->
                         </tbody>
                     </table>
+                    
+                    <!-- Selection Summary -->
+                    <div id="selectionSummary" class="selection-summary mt-3 p-3 rounded" style="display: none;">
+                        <div class="flex justify-between items-center">
+                            <span id="selectionCount" class="text-sm font-medium">0 rows selected</span>
+                            <span id="selectionTotal" class="text-lg font-bold">$0.00</span>
+                        </div>
+                    </div>
                     
                     <!-- Export CSV Button - Below Table -->
                     <div class="flex justify-center mt-4">
@@ -251,16 +261,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 </div>
 
-                <!-- Text to SQL UI -->
-                <div class="glass-block p-4 mb-6">
-                    <h2 class="text-lg font-semibold mb-2 text-purple-200">Ask a Question (Text to SQL)</h2>
-                    <form id="textToSqlForm" class="flex flex-col md:flex-row gap-2 items-center">
-                        <input id="textToSqlInput" type="text" class="rounded px-3 py-2 border w-full md:w-2/3 text-gray-900" placeholder="e.g. Show me total groceries spending by month" />
-                        <button type="submit" class="analyze-btn">Analyze</button>
-                    </form>
-                    <div id="textToSqlResult" class="mt-4"></div>
-                </div>
-
                 <!-- Enhanced Charts Grid -->
                 <div class="analytics-charts">
                     <!-- Row 1: Main Overview Charts -->
@@ -326,6 +326,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 <span class="modal-close" onclick="closeCategoryModal()">&times;</span>
             </div>
             <div class="modal-body">
+                <!-- Add New Category Section -->
+                <div class="add-category-section">
+                    <h3>Add New Category</h3>
+                    <div class="add-category-form">
+                        <input type="text" id="newCategoryName" placeholder="Category name" class="w-32 px-2 py-1 rounded text-sm border">
+                        <input type="text" id="newCategoryEmoji" placeholder="Emoji" class="w-16 px-2 py-1 rounded text-sm border">
+                        <button onclick="addNewCategoryFromModal()" class="btn-small btn-primary">Add Category</button>
+                    </div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <!-- Existing Categories List -->
+                <h3>Existing Categories</h3>
                 <div id="categoryList" class="category-list">
                     <!-- Categories will be populated here -->
                 </div>

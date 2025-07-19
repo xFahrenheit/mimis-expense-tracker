@@ -338,7 +338,7 @@ body.dark .category-badge-table {
 
 }
 
-.btn-pastel, .analyze-btn, .delete-expenses-btn {
+.btn-pastel, .delete-expenses-btn {
   background: var(--mint) !important;
   color: #222 !important;
   border: none !important;
@@ -351,7 +351,6 @@ body.dark .category-badge-table {
   font-family: 'Montserrat', 'Segoe UI', sans-serif !important;
 }
 .btn-pastel:hover, .btn-pastel:focus,
-.analyze-btn:hover, .analyze-btn:focus,
 .delete-expenses-btn:hover, .delete-expenses-btn:focus {
   background: var(--zomp) !important;
   color: #222 !important;
@@ -944,6 +943,77 @@ td .delete-row-btn {
   background: #2d8a5f;
 }
 
+.btn-delete {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #dc2626;
+}
+
+.btn-primary {
+  background: var(--zomp);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--mountbatten-pink);
+}
+
+/* Add Category Section */
+.add-category-section {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--champagne-pink) 0%, var(--platinum) 100%);
+}
+
+.add-category-section h3 {
+  margin: 0 0 12px 0;
+  color: var(--mountbatten-pink);
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.add-category-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.add-category-form input {
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+}
+
+.add-category-form input:focus {
+  outline: none;
+  border-color: var(--mint);
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.2);
+}
+
+.divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 20px 0;
+}
+
+.default-badge {
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-left: 8px;
+}
+
 /* Logo banner styling */
 .logo-banner {
   width: 100%;
@@ -1215,3 +1285,10 @@ td .delete-row-btn {
     padding-left: 0.5rem;
   }
 }
+
+/* Selection Summary */
+.selection-summary {
+  width: 100%;
+}
+
+/* Category Management Modal Styles */

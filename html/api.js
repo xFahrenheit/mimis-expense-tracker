@@ -109,12 +109,20 @@ export async function updateCategory(name, icon, color) {
     return res.json();
 }
 
-// Text to SQL query
-export async function textToSqlQuery(question) {
-    const res = await fetch(`${API_URL}/text_to_sql`, {
-        method: 'POST',
+// Delete a category
+export async function deleteCategory(name) {
+    const res = await fetch(`${API_URL}/categories/${encodeURIComponent(name)}`, {
+        method: 'DELETE'
+    });
+    return res.json();
+}
+
+// Rename a category
+export async function renameCategory(oldName, newName) {
+    const res = await fetch(`${API_URL}/categories/${encodeURIComponent(oldName)}/rename`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question })
+        body: JSON.stringify({ new_name: newName })
     });
     return res.json();
 }

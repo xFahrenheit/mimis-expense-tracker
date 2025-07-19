@@ -1,4 +1,4 @@
-import { CATEGORY_META, CATEGORY_LIST, addCategory, loadCategoriesFromBackend } from './config.js';
+import { CATEGORY_META, CATEGORY_LIST, addCategory, loadCategoriesFromBackend, API_URL } from './config.js';
 import { addCategory as addCategoryAPI } from './api.js';
 
 // Load categories from backend on initialization
@@ -110,7 +110,7 @@ export function closeCategoryModal() {
 // Populate the category list in the modal
 async function populateCategoryList() {
     try {
-        const response = await fetch(`${window.API_URL || 'http://localhost:5000'}/categories`);
+        const response = await fetch(`${API_URL}/categories`);
         const data = await response.json();
         const categories = data.categories || [];
         const metadata = data.metadata || {};
@@ -137,15 +137,26 @@ function createCategoryItem(name, icon, color) {
     const item = document.createElement('div');
     item.className = 'category-item';
     
+    const isDefault = ['food', 'groceries', 'entertainment', 'travel', 'utilities', 'shopping', 'gifts', 'medicines', 'charity', 'school'].includes(name.toLowerCase());
+    
     item.innerHTML = `
         <div class="category-info">
             <span class="category-emoji" title="Click to change emoji">${icon}</span>
-            <span class="category-name">${name.charAt(0).toUpperCase() + name.slice(1)}</span>
+            <span class="category-name" title="Click to edit name">${name.charAt(0).toUpperCase() + name.slice(1)}</span>
+            ${isDefault ? '<span class="default-badge">Default</span>' : ''}
         </div>
         <div class="category-actions">
             <button class="btn-small btn-edit" onclick="editCategoryEmoji('${name}', '${icon}')">
-                Change Emoji
+                Edit Emoji
             </button>
+            ${!isDefault ? `
+                <button class="btn-small btn-edit" onclick="editCategoryName('${name}')">
+                    Rename
+                </button>
+                <button class="btn-small btn-delete" onclick="deleteCategoryConfirm('${name}')">
+                    Delete
+                </button>
+            ` : ''}
         </div>
     `;
     
@@ -182,6 +193,114 @@ export async function editCategoryEmoji(categoryName, currentEmoji) {
     } catch (error) {
         console.error('Error updating category:', error);
         alert('Failed to update category. Please try again.');
+    }
+}
+
+// Add new category from modal
+export async function addNewCategoryFromModal() {
+    const nameInput = document.getElementById('newCategoryName');
+    const emojiInput = document.getElementById('newCategoryEmoji');
+    
+    if (!nameInput || !emojiInput) return;
+    
+    const name = nameInput.value.trim();
+    const emoji = emojiInput.value.trim();
+    
+    if (!name) {
+        alert('Category name is required!');
+        return;
+    }
+    
+    if (!emoji) {
+        alert('Emoji is required!');
+        return;
+    }
+    
+    try {
+        const { addCategory: addCategoryAPI } = await import('./api.js');
+        const result = await addCategoryAPI(name, emoji);
+        
+        if (result.success) {
+            // Clear inputs
+            nameInput.value = '';
+            emojiInput.value = '';
+            
+            // Refresh the list
+            await populateCategoryList();
+            await loadCategoriesFromBackend();
+            
+            alert(`Category "${name}" added successfully!`);
+        } else {
+            alert(result.error || 'Failed to add category');
+        }
+    } catch (error) {
+        console.error('Error adding category:', error);
+        alert('Failed to add category. Please try again.');
+    }
+}
+
+// Edit category name
+export async function editCategoryName(categoryName) {
+    const newName = prompt(`Enter new name for "${categoryName}" category:`, categoryName);
+    
+    if (newName === null) return; // User cancelled
+    
+    if (!newName.trim()) {
+        alert('Category name cannot be empty!');
+        return;
+    }
+    
+    if (newName.trim().toLowerCase() === categoryName.toLowerCase()) {
+        return; // No change
+    }
+    
+    try {
+        const { renameCategory } = await import('./api.js');
+        const result = await renameCategory(categoryName, newName.trim());
+        
+        if (result.success) {
+            alert(`Category "${categoryName}" renamed to "${newName.trim()}" successfully!`);
+            await populateCategoryList(); // Refresh the list
+            await loadCategoriesFromBackend();
+            
+            // Refresh the page to update all dropdowns and data
+            if (window.loadExpenses) {
+                await window.loadExpenses();
+            }
+        } else {
+            alert(result.error || 'Failed to rename category');
+        }
+    } catch (error) {
+        console.error('Error renaming category:', error);
+        alert('Failed to rename category. Please try again.');
+    }
+}
+
+// Delete category with confirmation
+export async function deleteCategoryConfirm(categoryName) {
+    const confirmed = confirm(`Are you sure you want to delete the category "${categoryName}"?\n\nThis action cannot be undone and will remove the category from all existing expenses.`);
+    
+    if (!confirmed) return;
+    
+    try {
+        const { deleteCategory } = await import('./api.js');
+        const result = await deleteCategory(categoryName);
+        
+        if (result.success) {
+            alert(`Category "${categoryName}" deleted successfully!`);
+            await populateCategoryList(); // Refresh the list
+            await loadCategoriesFromBackend();
+            
+            // Refresh the page to update all dropdowns and data
+            if (window.loadExpenses) {
+                await window.loadExpenses();
+            }
+        } else {
+            alert(result.error || 'Failed to delete category');
+        }
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        alert('Failed to delete category. Please try again.');
     }
 }
 

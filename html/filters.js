@@ -2,24 +2,71 @@ import { allExpenses, filteredExpenses, sortState, setFilteredExpenses, setSortS
 
 // Apply column filters and sorting
 export function applyColumnFilters(baseExpenses = null) {
-    // Use provided baseExpenses or fall back to allExpenses
-    const sourceExpenses = baseExpenses || allExpenses;
+    try {
+        // Use provided baseExpenses, or if no time period is active, use allExpenses
+        // If a time period is active and no baseExpenses provided, get time-period filtered expenses
+        let sourceExpenses;
+        
+        if (baseExpenses && Array.isArray(baseExpenses)) {
+            sourceExpenses = baseExpenses;
+        } else {
+            // Check if we have an active time period filter
+            try {
+                const currentPeriod = window.getCurrentPeriodFilter && window.getCurrentPeriodFilter();
+                if (currentPeriod && currentPeriod !== 'all-time') {
+                    // Use the current filteredExpenses which should be time-period filtered
+                    sourceExpenses = Array.isArray(filteredExpenses) ? filteredExpenses : [];
+                } else {
+                    sourceExpenses = Array.isArray(allExpenses) ? allExpenses : [];
+                }
+            } catch (error) {
+                console.warn('Error getting current period filter, using allExpenses:', error);
+                sourceExpenses = Array.isArray(allExpenses) ? allExpenses : [];
+            }
+        }
+        
+        // Safety check: ensure sourceExpenses is always an array
+        if (!Array.isArray(sourceExpenses)) {
+            console.warn('sourceExpenses is not an array, defaulting to empty array:', sourceExpenses);
+            sourceExpenses = [];
+        }
+        
+        // Debug logging
+        console.log('applyColumnFilters called with:', {
+            baseExpensesProvided: !!baseExpenses,
+            sourceExpensesLength: sourceExpenses.length,
+            currentPeriod: window.getCurrentPeriodFilter && window.getCurrentPeriodFilter()
+        });
     
     // Date range
-    const dateFrom = document.getElementById('filter-date-from').value;
-    const dateTo = document.getElementById('filter-date-to').value;
+    const dateFromEl = document.getElementById('filter-date-from');
+    const dateToEl = document.getElementById('filter-date-to');
+    const dateFrom = dateFromEl ? dateFromEl.value : '';
+    const dateTo = dateToEl ? dateToEl.value : '';
+    
     // Description
-    const descVal = document.getElementById('filter-description').value.toLowerCase();
+    const descEl = document.getElementById('filter-description');
+    const descVal = descEl ? descEl.value.toLowerCase() : '';
+    
     // Amount min/max
-    const amtMin = document.getElementById('filter-amount-min').value;
-    const amtMax = document.getElementById('filter-amount-max').value;
+    const amtMinEl = document.getElementById('filter-amount-min');
+    const amtMaxEl = document.getElementById('filter-amount-max');
+    const amtMin = amtMinEl ? amtMinEl.value : '';
+    const amtMax = amtMaxEl ? amtMaxEl.value : '';
+    
     // Dropdowns
-    const catVal = document.getElementById('filter-category').value;
-    const cardVal = document.getElementById('filter-card').value;
-    const whoVal = document.getElementById('filter-who').value;
-    const needVal = document.getElementById('filter-needcat')?.value;
+    const catEl = document.getElementById('filter-category');
+    const cardEl = document.getElementById('filter-card');
+    const whoEl = document.getElementById('filter-who');
+    const needEl = document.getElementById('filter-needcat');
+    const catVal = catEl ? catEl.value : '';
+    const cardVal = cardEl ? cardEl.value : '';
+    const whoVal = whoEl ? whoEl.value : '';
+    const needVal = needEl ? needEl.value : '';
+    
     // Notes
-    const notesVal = document.getElementById('filter-notes').value.toLowerCase();
+    const notesEl = document.getElementById('filter-notes');
+    const notesVal = notesEl ? notesEl.value.toLowerCase() : '';
     
     const filtered = sourceExpenses.filter(e => {
         // Date range filter
@@ -81,18 +128,34 @@ export function applyColumnFilters(baseExpenses = null) {
     if (window.renderExpenses) window.renderExpenses(filtered);
     if (window.renderCharts) window.renderCharts(filtered);
     if (window.updateSpendingBlocks) window.updateSpendingBlocks(filtered);
+    
+    } catch (error) {
+        console.error('Error in applyColumnFilters:', error);
+        // Fallback to rendering empty state
+        setFilteredExpenses([]);
+        if (window.renderExpenses) window.renderExpenses([]);
+    }
 }
 
 // Attach filter and sort listeners
 export function attachFilterAndSortListeners() {
+    console.log('Attaching filter and sort listeners...');
+    
     [
         'filter-date-from', 'filter-date-to', 'filter-description',
         'filter-amount-min', 'filter-amount-max',
         'filter-category', 'filter-card', 'filter-who', 'filter-notes'
     ].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.addEventListener('input', applyColumnFilters);
-        if (el && el.tagName === 'SELECT') el.addEventListener('change', applyColumnFilters);
+        if (el) {
+            el.addEventListener('input', applyColumnFilters);
+            if (el.tagName === 'SELECT') {
+                el.addEventListener('change', applyColumnFilters);
+            }
+            console.log(`Attached listeners to ${id}`);
+        } else {
+            console.warn(`Filter element not found: ${id}`);
+        }
     });
     
     // Sorting listeners
@@ -156,3 +219,6 @@ export function updateSortArrows() {
         }
     });
 }
+
+// Make functions available globally for time period integration
+window.applyColumnFilters = applyColumnFilters;

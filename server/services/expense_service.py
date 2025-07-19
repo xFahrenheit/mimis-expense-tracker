@@ -1,54 +1,15 @@
-def text_to_sql(req):
-    data = req.get_json()
-    question = data.get('question', '').lower().strip()
-    if not question:
-        return jsonify({'error': 'No question provided'}), 400
-    sql = None
-    chartType = 'pie'
-    label_col = None
-    value_col = None
-    if 'category' in question:
-        sql = "SELECT category, SUM(amount) FROM expenses GROUP BY category"
-        label_col = 'category'; value_col = 'SUM(amount)'
-        chartType = 'pie'
-    elif 'need' in question or 'luxury' in question:
-        sql = "SELECT need_category, SUM(amount) FROM expenses GROUP BY need_category"
-        label_col = 'need_category'; value_col = 'SUM(amount)'
-        chartType = 'pie'
-    elif 'gautami' in question or 'ameya' in question or 'spender' in question or 'who' in question:
-        sql = "SELECT who, SUM(amount) FROM expenses GROUP BY who"
-        label_col = 'who'; value_col = 'SUM(amount)'
-        chartType = 'pie'
-    elif 'month' in question:
-        sql = "SELECT substr(date,1,7) as month, SUM(amount) FROM expenses GROUP BY month"
-        label_col = 'month'; value_col = 'SUM(amount)'
-        chartType = 'bar'
-    elif 'card' in question:
-        sql = "SELECT card, SUM(amount) FROM expenses GROUP BY card"
-        label_col = 'card'; value_col = 'SUM(amount)'
-        chartType = 'pie'
-    elif 'top' in question and 'merchant' in question:
-        sql = "SELECT description, SUM(amount) FROM expenses GROUP BY description ORDER BY SUM(amount) DESC LIMIT 10"
-        label_col = 'description'; value_col = 'SUM(amount)'
-        chartType = 'bar'
-    else:
-        sql = "SELECT * FROM expenses LIMIT 100"
+from flask import request, abort, jsonify
+from .database_service import get_db_connection
+from .category_service import guess_category, guess_need_category
+import pandas as pd
+
+def read_csv(filepath):
+    """Read and parse CSV file for expense data"""
     try:
-        with get_db_connection() as conn:
-            cur = conn.execute(sql)
-            rows = cur.fetchall()
-            columns = [desc[0] for desc in cur.description]
+        df = pd.read_csv(filepath)
+        return df
     except Exception as e:
-        return jsonify({'error': f'SQL error: {e}'})
-    if label_col and value_col:
-        label_idx = columns.index(label_col)
-        value_idx = columns.index(value_col)
-        labels = [str(r[label_idx]) for r in rows]
-        values = [float(r[value_idx]) for r in rows]
-        return jsonify({'labels': labels, 'values': values, 'chartType': chartType})
-    else:
-        return jsonify({'columns': columns, 'rows': rows})
-from flask import request, abort
+        raise ValueError(f"Error reading CSV file: {str(e)}")
 
 def add_expense(req):
     data = req.get_json()
@@ -190,9 +151,6 @@ def get_expenses():
         cur = conn.execute('SELECT * FROM expenses')
         rows = [dict(zip([column[0] for column in cur.description], row)) for row in cur.fetchall()]
     return jsonify(rows)
-from services.database_service import get_db_connection
-from services.category_service import guess_category, guess_need_category
-import pandas as pd
 
 def insert_expenses(df, statement_id=None):
     with get_db_connection() as conn:

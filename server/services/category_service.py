@@ -86,6 +86,70 @@ def update_custom_category(name, icon=None, color=None):
         except sqlite3.Error:
             return False
 
+def delete_custom_category(name):
+    """Delete a custom category"""
+    name = name.lower().strip()
+    if not name:
+        return False
+    
+    # Don't allow deletion of default categories
+    if name in DEFAULT_CATEGORY_LABELS:
+        return False
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        try:
+            # Check if category exists
+            cur = conn.execute('SELECT name FROM custom_categories WHERE name = ?', (name,))
+            if not cur.fetchone():
+                return False
+            
+            # Delete the category
+            conn.execute('DELETE FROM custom_categories WHERE name = ?', (name,))
+            conn.commit()
+            refresh_categories()
+            return True
+        except sqlite3.Error:
+            return False
+
+def rename_custom_category(old_name, new_name):
+    """Rename a custom category"""
+    old_name = old_name.lower().strip()
+    new_name = new_name.lower().strip()
+    
+    if not old_name or not new_name:
+        return False
+    
+    # Don't allow renaming default categories
+    if old_name in DEFAULT_CATEGORY_LABELS:
+        return False
+    
+    # Check if new name conflicts with existing categories
+    all_categories = get_all_categories()
+    if new_name in all_categories:
+        return False
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        try:
+            # Check if old category exists
+            cur = conn.execute('SELECT name, icon, color FROM custom_categories WHERE name = ?', (old_name,))
+            result = cur.fetchone()
+            if not result:
+                return False
+            
+            icon, color = result[1], result[2]
+            
+            # Update all expenses that use this category
+            conn.execute('UPDATE expenses SET category = ? WHERE category = ?', (new_name, old_name))
+            
+            # Update the category name
+            conn.execute('UPDATE custom_categories SET name = ? WHERE name = ?', (new_name, old_name))
+            
+            conn.commit()
+            refresh_categories()
+            return True
+        except sqlite3.Error:
+            return False
+
 def get_category_metadata():
     """Get metadata for all categories"""
     metadata = {

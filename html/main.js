@@ -1,12 +1,12 @@
 // Main application entry point
 import { setAllExpenses, setFilteredExpenses } from './config.js';
-import { loadExpenses, loadStatements, uploadFile, deleteAllExpenses, recategorizeAll, textToSqlQuery } from './api.js';
+import { loadExpenses, loadStatements, uploadFile, deleteAllExpenses, recategorizeAll } from './api.js';
 import { renderCharts } from './charts.js';
 import { initializeCategories } from './categories.js';
 import { applyColumnFilters, attachFilterAndSortListeners } from './filters.js';
 import { exportFilteredToCSV, setupDarkModeToggle, setupAnalyticsToggle, setupNotesArea } from './helpers.js';
 import { renderExpenses, renderFilters, renderStatements, renderQuickFilterChips, renderRecentLargeExpenses, renderAverages } from './render.js';
-import { attachDeleteAllBtnListener, setupTabSwitching, setupUploadForm, setupTextToSql } from './dom_handlers.js';
+import { attachDeleteAllBtnListener, setupTabSwitching, setupUploadForm } from './dom_handlers.js';
 import { createTimePeriodTabs } from './time_periods.js';
 
 // Register ChartDataLabels plugin globally
@@ -23,30 +23,10 @@ async function loadExpensesMain() {
     // Apply initial sorting (by date, newest first)
     applyColumnFilters();
     
-    // Render components
+    // Render components (this handles all spending calculations and averages)
     renderExpenses(expenses);
     renderFilters(expenses);
     renderCharts(expenses);
-    
-    // Update total spending blocks
-    updateSpendingBlocks(expenses);
-    
-    // Render additional UI components
-    renderAverages(expenses);
-    renderQuickFilterChips(expenses);
-    renderRecentLargeExpenses(expenses);
-    
-    console.log('Loaded', expenses.length, 'expenses');
-    
-    // Initialize time periods AFTER table is loaded and working
-    setTimeout(async () => {
-        try {
-            await createTimePeriodTabs();
-            console.log('Time period tabs created successfully');
-        } catch (error) {
-            console.error('Error creating time period tabs:', error);
-        }
-    }, 1000);
 }
 
 // Main load function for statements
@@ -141,7 +121,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Setup UI components
     setupTabSwitching();
     setupUploadForm();
-    setupTextToSql();
     setupDarkModeToggle();
     setupAnalyticsToggle();
     setupNotesArea();
@@ -177,6 +156,26 @@ window.addEventListener('DOMContentLoaded', async () => {
 window.editCategoryEmoji = async (categoryName, currentEmoji) => {
     const { editCategoryEmoji } = await import('./categories.js');
     return editCategoryEmoji(categoryName, currentEmoji);
+};
+
+window.addNewCategoryFromModal = async () => {
+    const { addNewCategoryFromModal } = await import('./categories.js');
+    return addNewCategoryFromModal();
+};
+
+window.editCategoryName = async (categoryName) => {
+    const { editCategoryName } = await import('./categories.js');
+    return editCategoryName(categoryName);
+};
+
+window.deleteCategoryConfirm = async (categoryName) => {
+    const { deleteCategoryConfirm } = await import('./categories.js');
+    return deleteCategoryConfirm(categoryName);
+};
+
+window.closeCategoryModal = async () => {
+    const { closeCategoryModal } = await import('./categories.js');
+    return closeCategoryModal();
 };
 
 window.closeCategoryModal = async () => {

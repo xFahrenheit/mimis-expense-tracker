@@ -41,7 +41,11 @@ export const CHART_COLORS = [
 // Global state variables
 export let allExpenses = [];
 export let filteredExpenses = [];
-export let sortState = { column: 'date', direction: 1 }; // 1: asc, -1: desc (default: oldest first)
+// Load sort state from localStorage or use default
+const savedSortState = localStorage.getItem('expense-sort-state');
+export let sortState = savedSortState 
+    ? JSON.parse(savedSortState) 
+    : { column: 'date', direction: -1 }; // 1: asc, -1: desc (default: newest first)
 
 // State setters (these mutate the exported variables)
 export const setAllExpenses = (expenses) => { 
@@ -60,6 +64,8 @@ export const setFilteredExpenses = (expenses) => {
 
 export const setSortState = (state) => { 
     Object.assign(sortState, state);
+    // Save to localStorage for persistence
+    localStorage.setItem('expense-sort-state', JSON.stringify(sortState));
 };
 
 // Category helpers

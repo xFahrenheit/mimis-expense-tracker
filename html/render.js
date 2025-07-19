@@ -30,6 +30,9 @@ export function renderExpenses(expenses) {
     
     // Setup inline editing
     setupInlineEditing(tbody, expenses);
+    
+    // Initialize selection summary (hide it initially)
+    updateSelectionSummary([]);
 }
 
 // Render filters dropdowns
@@ -223,11 +226,120 @@ export function renderAverages(expenses) {
 
 // Helper functions
 
+// Shared utility functions
+function updateLocalExpenseData(expenseId, field, value) {
+    // Update in all three places consistently
+    const updateExpense = (exp) => {
+        if (exp && exp.id == expenseId) {
+            exp[field] = value;
+        }
+    };
+    
+    // Update in passed expenses array
+    const exp = window.currentExpenses?.find(e => e.id == expenseId);
+    updateExpense(exp);
+    
+    // Update in global arrays
+    updateExpense(window.allExpenses?.find(e => e.id == expenseId));
+    updateExpense(window.filteredExpenses?.find(e => e.id == expenseId));
+}
+
+function createWhoSelect(currentValue = '', className = 'w-full px-1 py-1 rounded text-xs') {
+    const isCustomValue = currentValue && !['Ameya', 'Gautami'].includes(currentValue);
+    return `
+        <select class="${className}" data-who-select>
+            <option value="Ameya" ${currentValue === 'Ameya' ? 'selected' : ''}>Ameya</option>
+            <option value="Gautami" ${currentValue === 'Gautami' ? 'selected' : ''}>Gautami</option>
+            <option value="__custom__" ${isCustomValue ? 'selected' : ''}>Other...</option>
+        </select>
+        <input type="text" class="${className} mt-1" data-who-custom 
+               placeholder="Enter name" 
+               style="display:${isCustomValue ? '' : 'none'};" 
+               value="${isCustomValue ? currentValue : ''}" />
+    `;
+}
+
+function setupWhoSelectLogic(container, onChange = null) {
+    const select = container.querySelector('[data-who-select]');
+    const customInput = container.querySelector('[data-who-custom]');
+    
+    if (!select || !customInput) return;
+    
+    select.addEventListener('change', () => {
+        const isCustom = select.value === '__custom__';
+        customInput.style.display = isCustom ? '' : 'none';
+        customInput.required = isCustom;
+        if (isCustom) customInput.focus();
+        if (onChange) onChange();
+    });
+    
+    return {
+        getValue: () => {
+            return select.value === '__custom__' ? customInput.value.trim() : select.value;
+        },
+        addCustomOption: (value) => {
+            if (value && ![...select.options].some(opt => opt.value === value)) {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = value;
+                select.appendChild(opt);
+            }
+        }
+    };
+}
+
+async function updateExpenseField(expenseId, field, value) {
+    const { API_URL } = await import('./config.js');
+    await fetch(`${API_URL}/expense/${expenseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+    });
+    updateLocalExpenseData(expenseId, field, value);
+    updateTotalSpending(window.filteredExpenses);
+}
+
 function updateTotalSpending(expenses) {
     const totalSpendingValue = document.getElementById('totalSpendingValue');
-    if (totalSpendingValue) {
-        const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-        totalSpendingValue.textContent = '$' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const gautamiSpendingValue = document.getElementById('gautamiSpendingValue');
+    const ameyaSpendingValue = document.getElementById('ameyaSpendingValue');
+    
+    if (totalSpendingValue || gautamiSpendingValue || ameyaSpendingValue) {
+        // Use provided expenses or fall back to window.filteredExpenses
+        const expensesToUse = expenses || window.filteredExpenses || [];
+        
+        // Calculate totals with split cost logic
+        const total = expensesToUse.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        let gautamiTotal = 0;
+        let ameyaTotal = 0;
+        
+        expensesToUse.forEach(e => {
+            const amount = Number(e.amount || 0);
+            
+            if (e.split_cost) {
+                // Split cost: each person gets half
+                const splitAmount = amount / 2;
+                gautamiTotal += splitAmount;
+                ameyaTotal += splitAmount;
+            } else {
+                const who = (e.who || '').toString().trim().toLowerCase();
+                if (who === 'gautami') {
+                    gautamiTotal += amount;
+                } else if (who === 'ameya') {
+                    ameyaTotal += amount;
+                }
+            }
+        });
+        
+        // Update all spending displays
+        if (totalSpendingValue) {
+            totalSpendingValue.textContent = '$' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        if (gautamiSpendingValue) {
+            gautamiSpendingValue.textContent = '$' + gautamiTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        if (ameyaSpendingValue) {
+            ameyaSpendingValue.textContent = '$' + ameyaTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
     }
 }
 
@@ -276,13 +388,8 @@ function addManualEntryRow(tbody) {
             </select>
         </td>
         <td class="py-2 px-3"><input type="text" class="add-card w-full px-1 py-1 rounded text-xs" placeholder="Card" /></td>
-        <td class="py-2 px-3">
-            <select class="add-who w-full px-1 py-1 rounded text-xs">
-                <option value="Ameya">Ameya</option>
-                <option value="Gautami">Gautami</option>
-                <option value="__custom__">Other...</option>
-            </select>
-            <input type="text" class="add-who-custom w-full px-1 py-1 rounded text-xs mt-1" placeholder="Enter name" style="display:none;" />
+        <td class="py-2 px-3" id="manual-who-container">
+            ${createWhoSelect('', 'add-who w-full px-1 py-1 rounded text-xs')}
         </td>
         <td class="py-2 px-3 text-center"><input type="checkbox" class="add-split" /></td>
         <td class="py-2 px-3 text-center"><input type="checkbox" class="add-outlier" /></td>
@@ -357,20 +464,9 @@ function setupManualEntryListeners(addTr) {
         });
     });
     
-    // Spender custom input logic
-    const whoSelect = addTr.querySelector('.add-who');
-    const whoCustom = addTr.querySelector('.add-who-custom');
-    
-    whoSelect.addEventListener('change', () => {
-        if (whoSelect.value === '__custom__') {
-            whoCustom.style.display = '';
-            whoCustom.required = true;
-            whoCustom.focus();
-        } else {
-            whoCustom.style.display = 'none';
-            whoCustom.required = false;
-        }
-    });
+    // Setup who select logic
+    const whoContainer = addTr.querySelector('#manual-who-container');
+    const whoSelectLogic = setupWhoSelectLogic(whoContainer);
     
     // Add expense button
     addTr.querySelector('.add-expense-btn').addEventListener('click', async () => {
@@ -380,20 +476,7 @@ function setupManualEntryListeners(addTr) {
         const category = addTr.querySelector('.add-category').value;
         const need_category = addTr.querySelector('.add-needcat').value;
         const card = addTr.querySelector('.add-card').value;
-        let who = addTr.querySelector('.add-who').value;
-        const whoCustom = addTr.querySelector('.add-who-custom').value.trim();
-        
-        if (who === '__custom__' && whoCustom) {
-            who = whoCustom;
-            // Add to dropdown for future use
-            if (![...whoSelect.options].some(opt => opt.value === who)) {
-                const opt = document.createElement('option');
-                opt.value = who;
-                opt.textContent = who;
-                whoSelect.appendChild(opt);
-            }
-        }
-        
+        const who = whoSelectLogic.getValue();
         const split_cost = addTr.querySelector('.add-split').checked;
         const outlier = addTr.querySelector('.add-outlier').checked;
         const notes = addTr.querySelector('.add-notes').value;
@@ -403,26 +486,36 @@ function setupManualEntryListeners(addTr) {
             return;
         }
         
+        if (who && !['Ameya', 'Gautami'].includes(who)) {
+            whoSelectLogic.addCustomOption(who);
+        }
+        
         await addExpense({ date, description, amount, category, need_category, card, who, split_cost, outlier, notes });
         if (window.loadExpenses) window.loadExpenses();
     });
 }
 
 function setupRowListeners(tr, exp) {
+    // Selection checkbox listener
+    const selectionCb = tr.querySelector('.autofill-row-checkbox');
+    if (selectionCb) {
+        selectionCb.addEventListener('change', () => {
+            updateFloatingButtonVisibility();
+        });
+    }
+    
     // Checkbox listeners
     const splitCb = tr.querySelector('.split-checkbox');
     if (splitCb) {
         splitCb.addEventListener('change', async () => {
-            await updateExpense(exp.id, { split_cost: splitCb.checked });
-            if (window.loadExpenses) window.loadExpenses();
+            await updateExpenseField(exp.id, 'split_cost', splitCb.checked);
         });
     }
     
     const outlierCb = tr.querySelector('.outlier-checkbox');
     if (outlierCb) {
         outlierCb.addEventListener('change', async () => {
-            await updateExpense(exp.id, { outlier: outlierCb.checked });
-            if (window.loadExpenses) window.loadExpenses();
+            await updateExpenseField(exp.id, 'outlier', outlierCb.checked);
         });
     }
     
@@ -501,10 +594,42 @@ function setupInlineEditing(tbody, expenses) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
+        
         // Update local data
         exp[field] = value;
-        // Re-render the table row (just reload all for simplicity)
-        if (window.loadExpenses) await window.loadExpenses();
+        
+        // Update the data in window.allExpenses and window.filteredExpenses too
+        if (window.allExpenses) {
+            const allExp = window.allExpenses.find(e => e.id == id);
+            if (allExp) allExp[field] = value;
+        }
+        if (window.filteredExpenses) {
+            const filteredExp = window.filteredExpenses.find(e => e.id == id);
+            if (filteredExp) filteredExp[field] = value;
+        }
+        
+        // Just update the spending totals and the cell content, don't reload everything
+        updateTotalSpending(window.filteredExpenses);
+        
+        // Update just this cell's display
+        if (cell) {
+            const row = cell.closest('tr');
+            if (field === 'amount') {
+                cell.textContent = `$${Number(value).toFixed(2)}`;
+            } else if (field === 'date') {
+                cell.textContent = formatDate(value);
+            } else if (field === 'who') {
+                cell.textContent = (value === 'Ameya' || value === 'Gautami') ? value : (value ? value : '');
+            } else if (field === 'category') {
+                // Update the category display with emoji
+                const { categories } = await import('./config.js');
+                const cat = categories.find(c => c.name === value);
+                cell.innerHTML = cat ? `${cat.emoji} ${cat.name}` : value;
+            } else {
+                cell.textContent = value;
+            }
+        }
+        
         // If called from inline edit, close the cell after update
         if (closeCellAfter) {
             if (cell) {
@@ -758,6 +883,61 @@ function updateFloatingButtonVisibility() {
     } else {
         floatingBtn.style.display = 'none';
     }
+    
+    // Update selection summary
+    updateSelectionSummary(selectedIds);
+}
+
+// Update selection summary with count and total
+function updateSelectionSummary(selectedIds) {
+    const totalSpendingValue = document.getElementById('totalSpendingValue');
+    const gautamiSpendingValue = document.getElementById('gautamiSpendingValue');
+    const ameyaSpendingValue = document.getElementById('ameyaSpendingValue');
+    
+    if (!totalSpendingValue) return;
+    
+    if (selectedIds.length === 0) {
+        // No selection, show the original totals for all
+        updateTotalSpending(window.filteredExpenses);
+        return;
+    }
+    
+    // Calculate totals for selected expenses with split cost logic
+    const filteredExpenses = window.filteredExpenses || [];
+    const selectedExpenses = selectedIds.map(id => 
+        filteredExpenses.find(exp => exp.id.toString() === id)
+    ).filter(Boolean);
+    
+    const total = selectedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    let gautamiTotal = 0;
+    let ameyaTotal = 0;
+    
+    selectedExpenses.forEach(e => {
+        const amount = Number(e.amount || 0);
+        
+        if (e.split_cost) {
+            // Split cost: each person gets half
+            const splitAmount = amount / 2;
+            gautamiTotal += splitAmount;
+            ameyaTotal += splitAmount;
+        } else {
+            const who = (e.who || '').toString().trim().toLowerCase();
+            if (who === 'gautami') {
+                gautamiTotal += amount;
+            } else if (who === 'ameya') {
+                ameyaTotal += amount;
+            }
+        }
+    });
+    
+    // Update all spending displays with selected totals
+    totalSpendingValue.textContent = `$${total.toFixed(2)}`;
+    if (gautamiSpendingValue) {
+        gautamiSpendingValue.textContent = `$${gautamiTotal.toFixed(2)}`;
+    }
+    if (ameyaSpendingValue) {
+        ameyaSpendingValue.textContent = `$${ameyaTotal.toFixed(2)}`;
+    }
 }
 
 // Helper function to show autofill input
@@ -849,3 +1029,7 @@ function getSelectedExpenseIds() {
     const checkboxes = document.querySelectorAll('.autofill-row-checkbox:checked');
     return Array.from(checkboxes).map(cb => cb.getAttribute('data-id'));
 }
+
+// Make functions available globally for time period integration
+window.renderQuickFilterChips = renderQuickFilterChips;
+window.renderExpenses = renderExpenses;
