@@ -80,6 +80,89 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
+    // Setup backup and push button
+    const backupPushBtn = document.getElementById('backupPushBtn');
+    if (backupPushBtn) {
+        backupPushBtn.addEventListener('click', async () => {
+            const { backupAndPush } = await import('./api.js');
+            
+            // Disable button and show loading state
+            backupPushBtn.disabled = true;
+            const originalText = backupPushBtn.textContent;
+            backupPushBtn.textContent = '🔄 Backing up...';
+            
+            try {
+                const result = await backupAndPush();
+                
+                if (result.success) {
+                    backupPushBtn.textContent = '✅ Success!';
+                    
+                    // Show success notification
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50';
+                    notification.innerHTML = `
+                        <div class="flex">
+                            <div class="py-1">
+                                <svg class="fill-current h-6 w-6 text-green-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-bold">Backup Successful!</p>
+                                <p class="text-sm">Your expenses have been backed up and pushed to GitHub.</p>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(notification);
+                    
+                    // Remove notification after 5 seconds
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 5000);
+                    
+                } else {
+                    backupPushBtn.textContent = '❌ Failed';
+                    
+                    // Show error notification
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50';
+                    notification.innerHTML = `
+                        <div class="flex">
+                            <div class="py-1">
+                                <svg class="fill-current h-6 w-6 text-red-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-bold">Backup Failed</p>
+                                <p class="text-sm">${result.message || 'Unknown error occurred'}</p>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(notification);
+                    
+                    // Remove notification after 8 seconds
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 8000);
+                }
+                
+            } catch (error) {
+                console.error('Backup failed:', error);
+                backupPushBtn.textContent = '❌ Error';
+                
+                // Show error notification
+                alert('Backup failed. Please check the console for details.');
+            } finally {
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    backupPushBtn.disabled = false;
+                    backupPushBtn.textContent = originalText;
+                }, 3000);
+            }
+        });
+    }
+    
     // Load initial data
     await loadStatementsMain();
     await loadExpensesMain();

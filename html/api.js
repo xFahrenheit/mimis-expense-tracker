@@ -126,3 +126,11 @@ export async function renameCategory(oldName, newName) {
     });
     return res.json();
 }
+
+// Backup and push database to git
+export async function backupAndPush() {
+    const res = await fetch(`${API_URL}/backup-and-push`, {
+        method: 'POST'
+    });
+    return res.json();
+}

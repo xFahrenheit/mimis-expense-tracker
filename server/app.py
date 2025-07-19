@@ -178,6 +178,51 @@ def list_statements():
 def reimport_statement(statement_id):
     return statement_service.reimport_statement(statement_id, app.config['UPLOAD_FOLDER'])
 
+@app.route('/backup-and-push', methods=['POST'])
+def backup_and_push():
+    """Backup database and push changes to git repository"""
+    import subprocess
+    import os
+    
+    try:
+        # Change to the parent directory (where db_manager.sh is located)
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Run the upload command with proper environment
+        result = subprocess.run(
+            ['bash', './db_manager.sh', 'upload'],
+            cwd=parent_dir,
+            capture_output=True,
+            text=True,
+            timeout=60,  # Increased timeout for git operations
+            env=dict(os.environ, LC_ALL='C', LANG='C')  # Set proper locale
+        )
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Database backed up and pushed successfully!',
+                'output': result.stdout
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Backup failed',
+                'error': result.stderr,
+                'output': result.stdout
+            }), 500
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'message': 'Backup operation timed out (may require password input)'
+        }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Backup failed: {str(e)}'
+        }), 500
+
 @app.route('/')
 def serve_index():
     return send_from_directory('../html', 'index.html')

@@ -320,6 +320,43 @@ body.dark .category-badge-table {
   box-shadow: 0 4px 16px 0 rgba(61, 160, 127, 0.18) !important;
 }
 
+/* Backup & Push Button */
+.btn-backup {
+  background: var(--champagne-pink) !important;
+  color: var(--zomp) !important;
+  border: 2px solid var(--mint) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 2px 8px 0 rgba(108, 189, 160, 0.15) !important;
+  padding: 0.75rem 1.5rem !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  transition: all 0.2s ease !important;
+  font-family: 'Montserrat', 'Segoe UI', sans-serif !important;
+  cursor: pointer !important;
+  position: relative !important;
+}
+
+.btn-backup:hover, .btn-backup:focus {
+  background: var(--mint) !important;
+  color: #222 !important;
+  border-color: var(--zomp) !important;
+  box-shadow: 0 4px 16px 0 rgba(108, 189, 160, 0.25) !important;
+  transform: translateY(-1px) !important;
+}
+
+.btn-backup:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 8px 0 rgba(108, 189, 160, 0.2) !important;
+}
+
+.btn-backup:disabled {
+  background: #f5f5f5 !important;
+  color: #999 !important;
+  border-color: #ddd !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
 /* Universal font and color for all UI elements */
 html, body, * {
   color: #222 !important;
