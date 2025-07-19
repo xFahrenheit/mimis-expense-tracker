@@ -14,12 +14,18 @@
     <script>
       window.ChartDataLabels = window.ChartDataLabels || ChartDataLabels;
     </script>
+    <script src="auth.js" type="module"></script>
     <script src="main.js" type="module" defer></script>
 </head>
 <body class="bg-gray-50 min-h-screen" style="font-family: 'Montserrat', 'Segoe UI', sans-serif;">
     <div class="w-full p-0 m-0" style="padding-left:18px; padding-right:18px;">
-        <div class="logo-banner mb-8">
+        <div class="logo-banner mb-8 flex justify-between items-center">
             <img src="logo.jpg" alt="Expense Tracker" class="logo-background" />
+            <div class="banner-controls flex gap-3 items-center">
+                <div id="userInfo" class="mr-4"></div>
+                <button id="manageCategoriesBtn" type="button" class="btn-pastel text-sm px-4 py-2">📂 Manage Categories</button>
+                <button id="householdManagerBtn" class="btn-pastel text-sm px-4 py-2">👥 Manage Household</button>
+            </div>
         </div>
         <!-- Tabbed UI -->
         <div class="glass-block p-2 mb-8">
@@ -42,13 +48,21 @@
                             <option value="wells fargo credit" data-bank="wells_fargo">Wells Fargo Credit</option>
                             <option value="amex" data-bank="amex">American Express</option>
                             <option value="citi credit" data-bank="citi">Citi Credit Card</option>
+                            <option value="sbi" data-bank="indian">State Bank of India (SBI)</option>
+                            <option value="hdfc bank" data-bank="indian">HDFC Bank</option>
+                            <option value="icici bank" data-bank="indian">ICICI Bank</option>
+                            <option value="axis bank" data-bank="indian">Axis Bank</option>
+                            <option value="kotak mahindra" data-bank="indian">Kotak Mahindra Bank</option>
+                            <option value="pnb" data-bank="indian">Punjab National Bank</option>
+                            <option value="bank of baroda" data-bank="indian">Bank of Baroda</option>
+                            <option value="idfc first bank" data-bank="indian">IDFC FIRST Bank</option>
+                            <option value="indian bank" data-bank="indian">Other Indian Bank</option>
                             <option value="auto-detect" data-bank="generic">Auto-detect Bank</option>
                             <option value="other" data-bank="generic">Other (type below)</option>
                         </select>
                         <input type="text" id="customCardInput" name="custom_card" class="rounded px-2 py-2" placeholder="Enter card name" style="display:none; min-width:120px;" />
                         <button type="submit" class="btn-pastel">Upload Statement</button>
                         <button id="recategorizeBtn" type="button" class="btn-pastel ml-2">Re-categorize All</button>
-                        <button id="manageCategoriesBtn" type="button" class="btn-pastel ml-2">Manage Categories</button>
                         <button id="deleteAllBtn" class="btn-pastel-red ml-2" style="margin-left:auto;">Delete All Expenses</button>
 <script>
 // Show/hide custom card input based on dropdown
@@ -82,15 +96,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             <span id="avgPerDay">$0/day</span> &middot; <span id="avgPerMonth">$0/mo</span>
                         </div>
                     </div>
-                    <div class="flex flex-row items-center md:items-end gap-4 ml-auto">
-                        <div class="flex flex-col items-center md:items-start">
-                            <div class="total-spending-label">Gautami's Spending</div>
-                            <div id="gautamiSpendingValue" class="total-spending-value">$0</div>
-                        </div>
-                        <div class="flex flex-col items-center md:items-start">
-                            <div class="total-spending-label">Ameya's Spending</div>
-                            <div id="ameyaSpendingValue" class="total-spending-value">$0</div>
-                        </div>
+                    <div class="flex flex-row items-center md:items-end gap-4 ml-auto" id="spendingBlocksContainer">
+                        <!-- Spending blocks will be dynamically generated based on user configuration -->
                     </div>
                 </div>
                 <!-- Quick Filter Chips -->

@@ -4,8 +4,15 @@ try:
     from category_examples import CATEGORY_EXAMPLES
 except ImportError:
     CATEGORY_EXAMPLES = {}
-
-DB_PATH = '/Users/gautami/expense_tracker/server/expense_tracker.db'
+try:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+    from household_config import HOUSEHOLD_CONFIG
+    DB_PATH = HOUSEHOLD_CONFIG['db_path']
+except ImportError:
+    # Fallback to relative path if config not available
+    DB_PATH = './expense_tracker.db'
 
 @contextmanager
 def get_db_connection():
@@ -56,4 +63,33 @@ def init_db():
                 color TEXT DEFAULT '#818cf8'
             )
         ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS household_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                config_json TEXT NOT NULL
+            )
+        ''')
+        
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1
+            )
+        ''')
+        
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_token TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        ''')
+        
         conn.commit()

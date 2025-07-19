@@ -1,5 +1,53 @@
 import { CHART_COLORS } from './config.js';
 
+// Currency detection based on selected bank or transaction data
+export function detectCurrentCurrency(expenses = null) {
+    // First check if Indian bank is selected in dropdown
+    const cardSelect = document.getElementById('cardSelect');
+    if (cardSelect && cardSelect.selectedOptions.length > 0) {
+        const selectedBank = cardSelect.selectedOptions[0].getAttribute('data-bank');
+        if (selectedBank === 'indian') {
+            return '₹';
+        }
+    }
+    
+    // Check if we have Indian bank data by looking at card names or descriptions
+    if (expenses && expenses.length > 0) {
+        const hasIndianBank = expenses.some(expense => {
+            const card = (expense.card || '').toLowerCase();
+            const description = (expense.description || '').toLowerCase();
+            return card.includes('idfc') || card.includes('hdfc') || card.includes('icici') || 
+                   card.includes('sbi') || card.includes('axis') || card.includes('kotak') ||
+                   description.includes('upi') || description.includes('imps') || description.includes('neft');
+        });
+        if (hasIndianBank) {
+            return '₹';
+        }
+    }
+    
+    // Check global expenses if available
+    if (window.filteredExpenses && window.filteredExpenses.length > 0) {
+        const hasIndianBank = window.filteredExpenses.some(expense => {
+            const card = (expense.card || '').toLowerCase();
+            const description = (expense.description || '').toLowerCase();
+            return card.includes('idfc') || card.includes('hdfc') || card.includes('icici') || 
+                   card.includes('sbi') || card.includes('axis') || card.includes('kotak') ||
+                   description.includes('upi') || description.includes('imps') || description.includes('neft');
+        });
+        if (hasIndianBank) {
+            return '₹';
+        }
+    }
+    
+    return '$'; // Default to USD
+}
+
+// Format currency with proper symbol
+export function formatCurrency(amount, expenses = null) {
+    const currency = detectCurrentCurrency(expenses);
+    return `${currency}${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+}
+
 // Generate colors for charts
 export function genColors(n) {
     return Array.from({length: n}, (_,i) => CHART_COLORS[i % CHART_COLORS.length]);
@@ -64,7 +112,11 @@ export function getBarChartOptions() {
                     weight: 'bold',
                     size: 10
                 },
-                formatter: (value) => `$${value.toFixed(0)}`,
+                formatter: (value, context) => {
+                    const data = context.chart.data.datasets[0].expenses || [];
+                    const currency = detectCurrentCurrency(data);
+                    return `${currency}${value.toFixed(0)}`;
+                },
                 anchor: 'end',
                 align: 'top'
             }

@@ -26,7 +26,7 @@ def reimport_statement(statement_id, upload_folder):
         if ext == 'pdf':
             df = pdf_service.parse_pdf(temp_path)
         elif ext == 'csv':
-            df = pd.read_csv(temp_path)
+            df = expense_service.read_csv(temp_path, 'generic')  # Use auto-detection for re-imports
         else:
             os.remove(temp_path)
             return jsonify({'error': 'Unsupported file type'}), 400

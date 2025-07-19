@@ -1,5 +1,5 @@
 // Configuration constants
-export const API_URL = 'http://localhost:3001';
+export const API_URL = window.location.origin;
 
 // Category metadata (will be loaded from backend)
 export let CATEGORY_META = {

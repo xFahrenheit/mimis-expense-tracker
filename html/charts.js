@@ -1,5 +1,7 @@
-import { genColors, getCSSColors, getPieChartOptions, getBarChartOptions } from './helpers.js';
+import { genColors, getCSSColors, getPieChartOptions, getBarChartOptions, detectCurrentCurrency } from './helpers.js';
 import { CATEGORY_META } from './config.js';
+import { USER_CONFIG } from './user-config.js';
+import { getCategoryDisplay } from './categories.js';
 
 // Global chart instances for cleanup
 const chartInstances = {};
@@ -86,10 +88,17 @@ function updateAnalyticsSummary(currentExpenses, allExpenses) {
         categoryTotals[a] > categoryTotals[b] ? a : b, 'None');
     
     // Update DOM elements
-    updateElement('analyticsTotalSpending', `$${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`);
-    updateElement('analyticsAvgDaily', `$${avgDaily.toLocaleString(undefined, {minimumFractionDigits: 2})}`);
-    updateElement('analyticsTopCategory', topCategory);
-    updateElement('analyticsTopCategoryAmount', `$${(categoryTotals[topCategory] || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`);
+    const currency = detectCurrentCurrency(filteredExpenses);
+    updateElement('analyticsTotalSpending', `${currency}${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`);
+    updateElement('analyticsAvgDaily', `${currency}${avgDaily.toLocaleString(undefined, {minimumFractionDigits: 2})}`);
+    
+    // Use innerHTML for category display to render HTML properly
+    const topCategoryElement = document.getElementById('analyticsTopCategory');
+    if (topCategoryElement) {
+        topCategoryElement.innerHTML = getCategoryDisplay(topCategory);
+    }
+    
+    updateElement('analyticsTopCategoryAmount', `${currency}${(categoryTotals[topCategory] || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}`);
     updateElement('analyticsTransactionCount', transactionCount.toString());
     
     // Calculate changes (simple placeholder - could be enhanced with historical comparison)
@@ -302,19 +311,32 @@ function renderNeedLuxuryChart(expenses) {
 
 // Render spender comparison pie chart
 function renderSpenderChart(expenses) {
-    const spenderTotals = { Gautami: 0, Ameya: 0 };
+    // Initialize spending totals for configured users
+    const spenderTotals = {};
+    USER_CONFIG.spenderChart.users.forEach(user => {
+        spenderTotals[user.key] = 0;
+    });
+    
     expenses.forEach(e => {
+        const amount = Number(e.amount || 0);
         if (e.split_cost) {
-            // Split cost: each gets half
-            spenderTotals.Gautami += Number(e.amount || 0) / 2;
-            spenderTotals.Ameya += Number(e.amount || 0) / 2;
+            // Split cost: divide equally among configured users
+            const splitAmount = amount / USER_CONFIG.spenderChart.users.length;
+            USER_CONFIG.spenderChart.users.forEach(user => {
+                spenderTotals[user.key] += splitAmount;
+            });
         } else {
-            if (e.who === 'Gautami') spenderTotals.Gautami += Number(e.amount || 0);
-            if (e.who === 'Ameya') spenderTotals.Ameya += Number(e.amount || 0);
+            const who = e.who;
+            if (spenderTotals.hasOwnProperty(who)) {
+                spenderTotals[who] += amount;
+            }
         }
     });
     
-    const spenderLabels = ['👩 Gautami', '👨 Ameya'];
+    const spenderLabels = USER_CONFIG.spenderChart.users.map(user => user.label);
+    const spenderData = USER_CONFIG.spenderChart.users.map(user => spenderTotals[user.key]);
+    const spenderColors = USER_CONFIG.spenderChart.users.map(user => user.color);
+    
     const ctxSpender = document.getElementById('spenderPieChart')?.getContext('2d');
     if (ctxSpender) {
         if (window.spenderChart) window.spenderChart.destroy();
@@ -323,11 +345,8 @@ function renderSpenderChart(expenses) {
             data: {
                 labels: spenderLabels,
                 datasets: [{
-                    data: [spenderTotals.Gautami, spenderTotals.Ameya],
-                    backgroundColor: [
-                        getComputedStyle(document.documentElement).getPropertyValue('--mint').trim(),
-                        getComputedStyle(document.documentElement).getPropertyValue('--rosy-brown').trim()
-                    ]
+                    data: spenderData,
+                    backgroundColor: spenderColors
                 }]
             },
             options: getPieChartOptions(),

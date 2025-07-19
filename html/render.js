@@ -1,6 +1,8 @@
 import { CATEGORY_META, CATEGORY_LIST, allExpenses } from './config.js';
 import { getCategoryMeta, createCategoryDropdown, handleCategorySelection } from './categories.js';
 import { addExpense, updateExpense, deleteExpense, reimportStatement, bulkDeleteExpenses } from './api.js';
+import { USER_CONFIG } from './user-config.js';
+import { detectCurrentCurrency, formatCurrency } from './helpers.js';
 
 // Render expense table
 export function renderExpenses(expenses) {
@@ -39,8 +41,8 @@ export function renderFilters(expenses) {
     // Populate dropdowns for category, card, who
     const categories = [...new Set(expenses.map(e => e.category).filter(Boolean))];
     const cards = [...new Set(expenses.map(e => e.card).filter(Boolean))];
-    // Always show Gautami, Ameya, Other in Who filter, plus any others present
-    const defaultWhos = ['Gautami', 'Ameya', 'Other'];
+    // Use configurable default users instead of hardcoded names
+    const defaultWhos = USER_CONFIG.defaultUsers;
     const whos = Array.from(new Set([...defaultWhos, ...expenses.map(e => e.who).filter(Boolean)]));
     
     const categoryFilter = document.getElementById('filter-category');
@@ -205,8 +207,9 @@ export function renderAverages(expenses) {
     const days = first && last ? ( (new Date(last) - new Date(first)) / (1000*60*60*24) + 1 ) : 1;
     const months = first && last ? ( (new Date(last).getFullYear() - new Date(first).getFullYear())*12 + (new Date(last).getMonth() - new Date(first).getMonth()) + 1 ) : 1;
     
-    avgDay.textContent = `$${(total/days).toLocaleString(undefined,{maximumFractionDigits:2})}/day`;
-    avgMonth.textContent = `$${(total/months).toLocaleString(undefined,{maximumFractionDigits:2})}/mo`;
+    const currency = detectCurrentCurrency(filteredExpenses);
+    avgDay.textContent = `${currency}${(total/days).toLocaleString(undefined,{maximumFractionDigits:2})}/day`;
+    avgMonth.textContent = `${currency}${(total/months).toLocaleString(undefined,{maximumFractionDigits:2})}/mo`;
 }
 
 // Helper functions
@@ -240,76 +243,98 @@ export function addOptionToSelect(select, value, text, isSelected = false) {
 
 // SINGLE SOURCE OF TRUTH: Update all spending displays with consistent formatting
 export function updateAllSpendingDisplays(expenses) {
-    const { total, gautami, ameya, splitTotal } = calculateSpendingTotals(expenses);
+    const spendingData = calculateSpendingTotals(expenses);
+    const { total, splitTotal, userTotals } = spendingData;
     
     // Calculate additional metrics
     const days = new Set(expenses.map(e => e.date)).size || 1;
     const months = new Set(expenses.map(e => (e.date||'').slice(0,7))).size || 1;
     
-    // Consistent formatting function
-    const formatCurrency = (amount) => `$${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    // Use helper function for currency detection and formatting
+    const currentCurrency = detectCurrentCurrency(expenses);
+    const formatCurrencyAmount = (amount) => formatCurrency(amount, expenses);
     
     // Update all spending elements with consistent formatting
     const elements = {
-        'totalSpendingValue': formatCurrency(total),
-        'gautamiSpendingValue': formatCurrency(gautami),
-        'ameyaSpendingValue': formatCurrency(ameya),
-        'splitSpendingValue': formatCurrency(splitTotal / 2),
-        'avgPerDay': `${formatCurrency(total / days).replace('$', '')}/day`,
-        'avgPerMonth': `${formatCurrency(total / months).replace('$', '')}/mo`
+        'totalSpendingValue': formatCurrencyAmount(total),
+        'splitSpendingValue': formatCurrencyAmount(splitTotal / USER_CONFIG.spendingBlocks.length),
+        'avgPerDay': `${formatCurrencyAmount(total / days).replace(currentCurrency, '')}/day`,
+        'avgPerMonth': `${formatCurrencyAmount(total / months).replace(currentCurrency, '')}/mo`
     };
+    
+    // Update configured user spending blocks
+    USER_CONFIG.spendingBlocks.forEach(block => {
+        elements[block.id] = formatCurrencyAmount(userTotals[block.userKey] || 0);
+    });
     
     Object.entries(elements).forEach(([id, text]) => {
         const el = document.getElementById(id);
         if (el) el.textContent = text;
     });
     
-    return { total, gautami, ameya, splitTotal };
+    return { total, userTotals, splitTotal, ...spendingData };
 }
 
 // Shared utility to calculate spending totals with split cost logic
 export function calculateSpendingTotals(expenses) {
     const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    let gautami = 0;
-    let ameya = 0;
+    
+    // Create dynamic user totals based on configuration
+    const userTotals = {};
+    USER_CONFIG.spendingBlocks.forEach(block => {
+        userTotals[block.userKey] = 0;
+    });
     let splitTotal = 0;
     
     expenses.forEach(e => {
         const amount = Number(e.amount || 0);
         
         if (e.split_cost) {
-            // Split cost: each person gets half
-            const splitAmount = amount / 2;
-            gautami += splitAmount;
-            ameya += splitAmount;
+            // Split cost: divide equally among configured users
+            const splitAmount = amount / USER_CONFIG.spendingBlocks.length;
+            USER_CONFIG.spendingBlocks.forEach(block => {
+                userTotals[block.userKey] += splitAmount;
+            });
             splitTotal += amount;
         } else {
-            const who = (e.who || '').toString().trim().toLowerCase();
-            if (who === 'gautami') {
-                gautami += amount;
-            } else if (who === 'ameya') {
-                ameya += amount;
+            const who = (e.who || '').toString().trim();
+            if (userTotals.hasOwnProperty(who)) {
+                userTotals[who] += amount;
             }
         }
     });
     
-    return { 
+    // For backward compatibility, provide fallback values for legacy code
+    const primaryUser = USER_CONFIG.spendingBlocks[0]?.userKey || 'Member 1';
+    const secondaryUser = USER_CONFIG.spendingBlocks[1]?.userKey || 'Member 2';
+    
+    const result = { 
         total, 
-        gautami, 
-        ameya, 
         splitTotal,
-        // Aliases for backward compatibility
-        gautamiTotal: gautami,
-        ameyaTotal: ameya
+        userTotals,
+        // Legacy compatibility - use first two configured users
+        gautami: userTotals[primaryUser] || 0,
+        ameya: userTotals[secondaryUser] || 0
     };
+    
+    // Add aliases for backward compatibility
+    result.gautamiTotal = result.gautami;
+    result.ameyaTotal = result.ameya;
+    
+    return result;
 }
 
 function createWhoSelect(currentValue = '', className = 'w-full px-1 py-1 rounded text-xs') {
-    const isCustomValue = currentValue && !['Ameya', 'Gautami'].includes(currentValue);
+    const defaultUsers = USER_CONFIG.defaultUsers.filter(u => u !== 'Other');
+    const isCustomValue = currentValue && ![...defaultUsers, 'Other'].includes(currentValue);
+    
+    const userOptions = defaultUsers.map(user => 
+        `<option value="${user}" ${currentValue === user ? 'selected' : ''}>${user}</option>`
+    ).join('');
+    
     return `
         <select class="${className}" data-who-select>
-            <option value="Ameya" ${currentValue === 'Ameya' ? 'selected' : ''}>Ameya</option>
-            <option value="Gautami" ${currentValue === 'Gautami' ? 'selected' : ''}>Gautami</option>
+            ${userOptions}
             <option value="__custom__" ${isCustomValue ? 'selected' : ''}>Other...</option>
         </select>
         <input type="text" class="${className} mt-1" data-who-custom 
@@ -390,13 +415,16 @@ function setupTableHeader(tbody) {
 }
 
 function addManualEntryRow(tbody) {
+    // Determine current currency for placeholder
+    const currentCurrency = detectCurrentCurrency(window.filteredExpenses || []);
+    
     const addTr = document.createElement('tr');
     addTr.innerHTML = `
         <td class="py-2 px-3 text-center"></td>
         <td class="py-2 px-3 text-center"></td>
         <td class="py-2 px-3"><input type="date" class="add-date w-full px-1 py-1 rounded text-xs" /></td>
         <td class="py-2 px-3"><input type="text" class="add-description w-full px-1 py-1 rounded text-xs" placeholder="Description" /></td>
-        <td class="py-2 px-3"><input type="number" class="add-amount w-full px-1 py-1 rounded text-xs" placeholder="$" step="0.01" /></td>
+        <td class="py-2 px-3"><input type="number" class="add-amount w-full px-1 py-1 rounded text-xs" placeholder="${currentCurrency}" step="0.01" /></td>
         <td class="py-2 px-3" style="text-align:center;">
             <div class="add-category-container"></div>
         </td>
@@ -452,7 +480,7 @@ function renderExpenseRow(tbody, exp) {
         </td>
         <td class="py-2 px-3 editable-cell" data-field="date" data-id="${exp.id}" data-sort-value="${exp.date || ''}">${formatDate(exp.date)}</td>
         <td class="py-2 px-3 editable-cell" data-field="description" data-id="${exp.id}">${exp.description || ''}</td>
-        <td class="py-2 px-3 editable-cell" data-field="amount" data-id="${exp.id}">$${Number(exp.amount).toFixed(2)}</td>
+        <td class="py-2 px-3 editable-cell" data-field="amount" data-id="${exp.id}">${formatCurrency(Number(exp.amount), [exp])}</td>
         <td class="py-2 px-3 editable-cell" data-field="category" data-id="${exp.id}" style="text-align:center;">
             <span style="font-size:1.2em;vertical-align:middle;margin-right:4px;color:${meta.color};">${meta.icon}</span>
             ${(exp.category || 'shopping').charAt(0).toUpperCase()+(exp.category || 'shopping').slice(1)}
@@ -604,7 +632,8 @@ function setupInlineEditing(tbody, expenses) {
         // First, update the cell display immediately
         if (cell) {
             if (field === 'amount') {
-                cell.textContent = `$${Number(value).toFixed(2)}`;
+                const currency = detectCurrentCurrency(window.filteredExpenses || []);
+                cell.textContent = `${currency}${Number(value).toFixed(2)}`;
             } else if (field === 'date') {
                 cell.textContent = formatDate(value);
             } else if (field === 'who') {
@@ -651,16 +680,19 @@ function setupInlineEditing(tbody, expenses) {
             const { total, gautami, ameya, splitTotal } = calculateSpendingTotals(window.filteredExpenses);
             const days = new Set(window.filteredExpenses.map(e => e.date)).size || 1;
             const months = new Set(window.filteredExpenses.map(e => (e.date||'').slice(0,7))).size || 1;
-            const formatCurrency = (amount) => `$${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            // Use helper functions for currency formatting
+            const currentCurrency = detectCurrentCurrency(window.filteredExpenses);
+            const formatCurrencyAmount = (amount) => formatCurrency(amount, window.filteredExpenses);
             
             // Update spending displays directly without triggering any re-renders
             const elements = {
-                'totalSpendingValue': formatCurrency(total),
-                'gautamiSpendingValue': formatCurrency(gautami),
-                'ameyaSpendingValue': formatCurrency(ameya),
-                'splitSpendingValue': formatCurrency(splitTotal / 2),
-                'avgPerDay': `${formatCurrency(total / days).replace('$', '')}/day`,
-                'avgPerMonth': `${formatCurrency(total / months).replace('$', '')}/mo`
+                'totalSpendingValue': formatCurrencyAmount(total),
+                'gautamiSpendingValue': formatCurrencyAmount(gautami),
+                'ameyaSpendingValue': formatCurrencyAmount(ameya),
+                'splitSpendingValue': formatCurrencyAmount(splitTotal / 2),
+                'avgPerDay': `${formatCurrencyAmount(total / days).replace(currentCurrency, '')}/day`,
+                'avgPerMonth': `${formatCurrencyAmount(total / months).replace(currentCurrency, '')}/mo`
             };
             
             Object.entries(elements).forEach(([id, text]) => {

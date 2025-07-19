@@ -166,11 +166,17 @@ def get_category_metadata():
     }
     
     # Add custom categories
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.execute('SELECT name, icon, color FROM custom_categories')
-        for row in cur.fetchall():
-            name, icon, color = row
-            metadata[name] = {'icon': icon, 'color': color}
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.execute('SELECT name, icon, color FROM custom_categories')
+            for row in cur.fetchall():
+                name, icon, color = row
+                metadata[name] = {'icon': icon, 'color': color}
+    except sqlite3.OperationalError as e:
+        print(f"Warning: Could not load custom categories: {e}")
+        # Initialize the database if table doesn't exist
+        from . import database_service
+        database_service.init_db()
     
     return metadata
 
