@@ -13,6 +13,7 @@ A comprehensive web application for tracking and analyzing personal expenses wit
 - **✏️ Inline Editing**: Click-to-edit any expense field with real-time updates
 - **🔍 Advanced Filtering**: Filter by category, card, spender, date range, and more
 - **📈 Visual Analytics**: Interactive charts for spending patterns and trends
+- **🔐 Secure Sharing**: Encrypted database sharing for couples/families
 
 ### Bank Support
 - Chase Sapphire
@@ -73,6 +74,10 @@ expense_tracker/
 │   │   ├── statement_service.py
 │   │   └── cleanup_service.py
 │   └── uploads/            # Uploaded statements
+├── security/               # Database security tools
+│   ├── db_manager.sh       # Database encryption/decryption
+│   ├── DATABASE_SECURITY.md # Security documentation
+│   └── db_backups/         # Automatic backups (local only)
 └── logo/                   # Application assets
 ```
 
@@ -110,6 +115,72 @@ expense_tracker/
 
 5. **Open the application**
    Open `html/index.html` in your web browser or serve it through a local server.
+
+## 🔐 Secure Multi-User Setup
+
+### For Couples/Families: Encrypted Database Sharing
+
+This expense tracker includes a secure system for sharing your financial data between trusted users (like spouses) without exposing it to GitHub or other third parties.
+
+#### Security Features
+- ✅ **AES-256 Encryption**: Military-grade encryption for your financial data
+- ✅ **Zero GitHub Access**: GitHub only sees encrypted files, never your actual data
+- ✅ **Automatic Backups**: Timestamped backups prevent data loss
+- ✅ **Conflict Detection**: Warns before overwriting changes
+
+#### Setup for Multiple Users
+
+1. **First User Setup** (you've already done this)
+   ```bash
+   # Your database is already created and working
+   ./db_manager.sh encrypt  # Create first encrypted version
+   git add expense_tracker_encrypted.db .gitignore db_manager.sh DATABASE_SECURITY.md
+   git commit -m "Add secure database sharing"
+   git push
+   ```
+
+2. **Second User Setup** (your husband)
+   ```bash
+   git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
+   cd mimis-expense-tracker
+   python -m venv .venv
+   source .venv/bin/activate
+   cd server && pip install -r requirements.txt
+   cd ..
+   ./db_manager.sh decrypt  # Enter the shared password
+   ```
+
+#### Daily Workflow
+
+**To upload your changes:**
+```bash
+# Stop Flask server first
+./db_manager.sh encrypt
+git add expense_tracker_encrypted.db
+git commit -m "Update expenses $(date +%Y-%m-%d)"
+git push
+```
+
+**To get other person's changes:**
+```bash
+./db_manager.sh sync
+cd server && python app.py
+```
+
+**If both edit simultaneously:**
+```bash
+./db_manager.sh sync  # Downloads both versions
+# Manually merge using web interface or SQLite tools
+./db_manager.sh encrypt  # Upload merged version
+```
+
+#### Database Manager Commands
+- `./db_manager.sh encrypt` - Encrypt database for upload
+- `./db_manager.sh decrypt` - Decrypt database for use
+- `./db_manager.sh sync` - Download latest + handle conflicts
+- `./db_manager.sh backup` - Create manual backup
+
+📖 **See `DATABASE_SECURITY.md` for detailed security documentation**
 
 ### Quick Start
 1. Upload a bank statement (CSV or PDF)
