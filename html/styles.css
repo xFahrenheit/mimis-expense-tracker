@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
 /* Pastel Red Button */
 .btn-pastel-red {
     background: var(--pastel-red, #ffb3b3);
@@ -302,7 +304,6 @@ body.dark .category-badge-table {
     max-height: 260px;
   }
 }
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
 
 /* Themed filter/sort arrows for table headings */
 .filter-arrow {
@@ -320,8 +321,6 @@ body.dark .category-badge-table {
   color: var(--zomp);
   text-shadow: 0 2px 8px rgba(61,160,127,0.13);
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
 
 :root {
 

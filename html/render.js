@@ -244,6 +244,81 @@ function updateLocalExpenseData(expenseId, field, value) {
     updateExpense(window.filteredExpenses?.find(e => e.id == expenseId));
 }
 
+// Shared utility to add options to select elements
+export function addOptionToSelect(select, value, text, isSelected = false) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    if (isSelected) option.selected = true;
+    select.appendChild(option);
+}
+
+// SINGLE SOURCE OF TRUTH: Update all spending displays with consistent formatting
+export function updateAllSpendingDisplays(expenses) {
+    const { total, gautami, ameya, splitTotal } = calculateSpendingTotals(expenses);
+    
+    // Calculate additional metrics
+    const days = new Set(expenses.map(e => e.date)).size || 1;
+    const months = new Set(expenses.map(e => (e.date||'').slice(0,7))).size || 1;
+    
+    // Consistent formatting function
+    const formatCurrency = (amount) => `$${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    
+    // Update all spending elements with consistent formatting
+    const elements = {
+        'totalSpendingValue': formatCurrency(total),
+        'gautamiSpendingValue': formatCurrency(gautami),
+        'ameyaSpendingValue': formatCurrency(ameya),
+        'splitSpendingValue': formatCurrency(splitTotal / 2),
+        'avgPerDay': `${formatCurrency(total / days).replace('$', '')}/day`,
+        'avgPerMonth': `${formatCurrency(total / months).replace('$', '')}/mo`
+    };
+    
+    Object.entries(elements).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    });
+    
+    return { total, gautami, ameya, splitTotal };
+}
+
+// Shared utility to calculate spending totals with split cost logic
+export function calculateSpendingTotals(expenses) {
+    const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    let gautami = 0;
+    let ameya = 0;
+    let splitTotal = 0;
+    
+    expenses.forEach(e => {
+        const amount = Number(e.amount || 0);
+        
+        if (e.split_cost) {
+            // Split cost: each person gets half
+            const splitAmount = amount / 2;
+            gautami += splitAmount;
+            ameya += splitAmount;
+            splitTotal += amount;
+        } else {
+            const who = (e.who || '').toString().trim().toLowerCase();
+            if (who === 'gautami') {
+                gautami += amount;
+            } else if (who === 'ameya') {
+                ameya += amount;
+            }
+        }
+    });
+    
+    return { 
+        total, 
+        gautami, 
+        ameya, 
+        splitTotal,
+        // Aliases for backward compatibility
+        gautamiTotal: gautami,
+        ameyaTotal: ameya
+    };
+}
+
 function createWhoSelect(currentValue = '', className = 'w-full px-1 py-1 rounded text-xs') {
     const isCustomValue = currentValue && !['Ameya', 'Gautami'].includes(currentValue);
     return `
@@ -278,11 +353,7 @@ function setupWhoSelectLogic(container, onChange = null) {
             return select.value === '__custom__' ? customInput.value.trim() : select.value;
         },
         addCustomOption: (value) => {
-            if (value && ![...select.options].some(opt => opt.value === value)) {
-                const opt = document.createElement('option');
-                opt.value = opt.textContent = value;
-                select.appendChild(opt);
-            }
+            addOptionToSelect(select, value);
         }
     };
 }
@@ -299,48 +370,11 @@ async function updateExpenseField(expenseId, field, value) {
 }
 
 function updateTotalSpending(expenses) {
-    const totalSpendingValue = document.getElementById('totalSpendingValue');
-    const gautamiSpendingValue = document.getElementById('gautamiSpendingValue');
-    const ameyaSpendingValue = document.getElementById('ameyaSpendingValue');
+    // Use provided expenses or fall back to window.filteredExpenses
+    const expensesToUse = expenses || window.filteredExpenses || [];
     
-    if (totalSpendingValue || gautamiSpendingValue || ameyaSpendingValue) {
-        // Use provided expenses or fall back to window.filteredExpenses
-        const expensesToUse = expenses || window.filteredExpenses || [];
-        
-        // Calculate totals with split cost logic
-        const total = expensesToUse.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-        let gautamiTotal = 0;
-        let ameyaTotal = 0;
-        
-        expensesToUse.forEach(e => {
-            const amount = Number(e.amount || 0);
-            
-            if (e.split_cost) {
-                // Split cost: each person gets half
-                const splitAmount = amount / 2;
-                gautamiTotal += splitAmount;
-                ameyaTotal += splitAmount;
-            } else {
-                const who = (e.who || '').toString().trim().toLowerCase();
-                if (who === 'gautami') {
-                    gautamiTotal += amount;
-                } else if (who === 'ameya') {
-                    ameyaTotal += amount;
-                }
-            }
-        });
-        
-        // Update all spending displays
-        if (totalSpendingValue) {
-            totalSpendingValue.textContent = '$' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        }
-        if (gautamiSpendingValue) {
-            gautamiSpendingValue.textContent = '$' + gautamiTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        }
-        if (ameyaSpendingValue) {
-            ameyaSpendingValue.textContent = '$' + ameyaTotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        }
-    }
+    // Use the single source of truth function
+    updateAllSpendingDisplays(expensesToUse);
 }
 
 function setupTableHeader(tbody) {
@@ -552,12 +586,7 @@ function setupInlineEditing(tbody, expenses) {
                 if (value === '__custom__') {
                     value = whoCustom.value.trim();
                     // Add to dropdown for future use
-                    if (value && ![...whoSelect.options].some(opt => opt.value === value)) {
-                        const opt = document.createElement('option');
-                        opt.value = value;
-                        opt.textContent = value;
-                        whoSelect.appendChild(opt);
-                    }
+                    addOptionToSelect(whoSelect, value);
                 }
             } else if (field === 'category') {
                 const catSelect = editingCell.querySelector('.edit-inline-category');
@@ -586,6 +615,30 @@ function setupInlineEditing(tbody, expenses) {
     // saveInlineEdit function
     async function saveInlineEdit(cell, exp, field, value, closeCellAfter = false) {
         const { API_URL } = await import('./config.js');
+        
+        // First, update the cell display immediately
+        if (cell) {
+            if (field === 'amount') {
+                cell.textContent = `$${Number(value).toFixed(2)}`;
+            } else if (field === 'date') {
+                cell.textContent = formatDate(value);
+            } else if (field === 'who') {
+                cell.innerHTML = (value === 'Ameya' || value === 'Gautami') ? value : (value ? `<span class='custom-who'>${value}</span>` : '');
+            } else if (field === 'category') {
+                const { getCategoryMeta } = await import('./categories.js');
+                const meta = getCategoryMeta(value);
+                cell.innerHTML = `
+                    <span style="font-size:1.2em;vertical-align:middle;margin-right:4px;color:${meta.color};">${meta.icon}</span>
+                    ${value.charAt(0).toUpperCase() + value.slice(1)}
+                `;
+            } else if (field === 'need_category') {
+                let needBadgeClass = value === 'Luxury' ? 'luxury-badge' : 'need-badge';
+                cell.innerHTML = `<span class="${needBadgeClass}">${value}</span>`;
+            } else {
+                cell.textContent = value;
+            }
+        }
+        
         // PATCH to backend
         const id = exp.id;
         const payload = { [field]: value };
@@ -608,26 +661,27 @@ function setupInlineEditing(tbody, expenses) {
             if (filteredExp) filteredExp[field] = value;
         }
         
-        // Just update the spending totals and the cell content, don't reload everything
-        updateTotalSpending(window.filteredExpenses);
-        
-        // Update just this cell's display
-        if (cell) {
-            const row = cell.closest('tr');
-            if (field === 'amount') {
-                cell.textContent = `$${Number(value).toFixed(2)}`;
-            } else if (field === 'date') {
-                cell.textContent = formatDate(value);
-            } else if (field === 'who') {
-                cell.textContent = (value === 'Ameya' || value === 'Gautami') ? value : (value ? value : '');
-            } else if (field === 'category') {
-                // Update the category display with emoji
-                const { categories } = await import('./config.js');
-                const cat = categories.find(c => c.name === value);
-                cell.innerHTML = cat ? `${cat.emoji} ${cat.name}` : value;
-            } else {
-                cell.textContent = value;
-            }
+        // Update spending totals only if amount changed, and do it silently
+        if (field === 'amount') {
+            const { total, gautami, ameya, splitTotal } = calculateSpendingTotals(window.filteredExpenses);
+            const days = new Set(window.filteredExpenses.map(e => e.date)).size || 1;
+            const months = new Set(window.filteredExpenses.map(e => (e.date||'').slice(0,7))).size || 1;
+            const formatCurrency = (amount) => `$${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            // Update spending displays directly without triggering any re-renders
+            const elements = {
+                'totalSpendingValue': formatCurrency(total),
+                'gautamiSpendingValue': formatCurrency(gautami),
+                'ameyaSpendingValue': formatCurrency(ameya),
+                'splitSpendingValue': formatCurrency(splitTotal / 2),
+                'avgPerDay': `${formatCurrency(total / days).replace('$', '')}/day`,
+                'avgPerMonth': `${formatCurrency(total / months).replace('$', '')}/mo`
+            };
+            
+            Object.entries(elements).forEach(([id, text]) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = text;
+            });
         }
         
         // If called from inline edit, close the cell after update
@@ -721,12 +775,7 @@ function setupInlineEditing(tbody, expenses) {
                     if (whoVal === '__custom__') {
                         whoVal = whoCustom.value.trim();
                         // Add to dropdown for future use
-                        if (whoVal && ![...whoSelect.options].some(opt => opt.value === whoVal)) {
-                            const opt = document.createElement('option');
-                            opt.value = whoVal;
-                            opt.textContent = whoVal;
-                            whoSelect.appendChild(opt);
-                        }
+                        addOptionToSelect(whoSelect, whoVal);
                     }
                     saveInlineEdit(cell, exp, field, whoVal);
                 } else {
@@ -742,12 +791,7 @@ function setupInlineEditing(tbody, expenses) {
                         let whoVal = whoSelect.value;
                         if (whoVal === '__custom__') {
                             whoVal = whoCustom.value.trim();
-                            if (whoVal && ![...whoSelect.options].some(opt => opt.value === whoVal)) {
-                                const opt = document.createElement('option');
-                                opt.value = whoVal;
-                                opt.textContent = whoVal;
-                                whoSelect.appendChild(opt);
-                            }
+                            addOptionToSelect(whoSelect, whoVal);
                         }
                         saveInlineEdit(cell, exp, field, whoVal);
                     } else {
@@ -766,7 +810,7 @@ function setupInlineEditing(tbody, expenses) {
     // Exit edit mode when clicking outside any cell
     document.addEventListener('click', function docClick(e) {
         if (editingCell && !editingCell.contains(e.target)) {
-            exitEditMode();
+            exitEditMode(true); // Save changes when clicking outside
         }
     }, { capture: true });
 }
@@ -826,9 +870,7 @@ async function handleBulkDelete(button) {
     button.textContent = 'Deleting...';
     
     try {
-        console.log('Deleting expenses with IDs:', selectedIds);
         await bulkDeleteExpenses(selectedIds);
-        console.log('Bulk delete completed, reloading expenses...');
         
         // Clear all checkboxes immediately to avoid stale state
         const checkboxes = document.querySelectorAll('.autofill-row-checkbox, .autofill-header-checkbox');
@@ -840,7 +882,6 @@ async function handleBulkDelete(button) {
         // Apply filters to maintain current view
         if (window.applyColumnFilters) {
             window.applyColumnFilters();
-            console.log('Filters reapplied successfully');
         }
         
         alert(`Successfully deleted ${selectedIds.length} expense(s).`);
@@ -890,54 +931,20 @@ function updateFloatingButtonVisibility() {
 
 // Update selection summary with count and total
 function updateSelectionSummary(selectedIds) {
-    const totalSpendingValue = document.getElementById('totalSpendingValue');
-    const gautamiSpendingValue = document.getElementById('gautamiSpendingValue');
-    const ameyaSpendingValue = document.getElementById('ameyaSpendingValue');
-    
-    if (!totalSpendingValue) return;
-    
     if (selectedIds.length === 0) {
         // No selection, show the original totals for all
         updateTotalSpending(window.filteredExpenses);
         return;
     }
     
-    // Calculate totals for selected expenses with split cost logic
+    // Calculate totals for selected expenses using centralized function
     const filteredExpenses = window.filteredExpenses || [];
     const selectedExpenses = selectedIds.map(id => 
         filteredExpenses.find(exp => exp.id.toString() === id)
     ).filter(Boolean);
     
-    const total = selectedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    let gautamiTotal = 0;
-    let ameyaTotal = 0;
-    
-    selectedExpenses.forEach(e => {
-        const amount = Number(e.amount || 0);
-        
-        if (e.split_cost) {
-            // Split cost: each person gets half
-            const splitAmount = amount / 2;
-            gautamiTotal += splitAmount;
-            ameyaTotal += splitAmount;
-        } else {
-            const who = (e.who || '').toString().trim().toLowerCase();
-            if (who === 'gautami') {
-                gautamiTotal += amount;
-            } else if (who === 'ameya') {
-                ameyaTotal += amount;
-            }
-        }
-    });
-    
-    // Update all spending displays with selected totals
-    totalSpendingValue.textContent = `$${total.toFixed(2)}`;
-    if (gautamiSpendingValue) {
-        gautamiSpendingValue.textContent = `$${gautamiTotal.toFixed(2)}`;
-    }
-    if (ameyaSpendingValue) {
-        ameyaSpendingValue.textContent = `$${ameyaTotal.toFixed(2)}`;
-    }
+    // Use the single source of truth function
+    updateAllSpendingDisplays(selectedExpenses);
 }
 
 // Helper function to show autofill input
@@ -1032,4 +1039,3 @@ function getSelectedExpenseIds() {
 
 // Make functions available globally for time period integration
 window.renderQuickFilterChips = renderQuickFilterChips;
-window.renderExpenses = renderExpenses;

@@ -6,11 +6,6 @@ const chartInstances = {};
 
 // Render all charts
 export function renderCharts(expenses) {
-    // Register ChartDataLabels plugin globally
-    if (window.Chart && window.ChartDataLabels) {
-        Chart.register(window.ChartDataLabels);
-    }
-
     // Filter expenses based on date range
     const filteredExpenses = filterExpensesByDateRange(expenses);
     

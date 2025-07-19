@@ -1,5 +1,6 @@
 import { CATEGORY_META, CATEGORY_LIST, addCategory, loadCategoriesFromBackend, API_URL } from './config.js';
 import { addCategory as addCategoryAPI } from './api.js';
+import { addOptionToSelect } from './render.js';
 
 // Load categories from backend on initialization
 export async function initializeCategories() {
@@ -13,21 +14,16 @@ export function createCategoryDropdown(currentCategory = '') {
     
     // Add existing categories
     CATEGORY_LIST.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat;
         const meta = CATEGORY_META[cat];
-        option.textContent = `${meta.icon} ${cat.charAt(0).toUpperCase() + cat.slice(1)}`;
-        if (cat === currentCategory) option.selected = true;
-        select.appendChild(option);
+        const displayText = `${meta.icon} ${cat.charAt(0).toUpperCase() + cat.slice(1)}`;
+        addOptionToSelect(select, cat, displayText, cat === currentCategory);
     });
     
     // Add "Add Category" option
-    const addOption = document.createElement('option');
-    addOption.value = '__ADD_NEW__';
-    addOption.textContent = '+ Add Category';
-    addOption.style.fontStyle = 'italic';
-    addOption.style.color = '#666';
-    select.appendChild(addOption);
+    addOptionToSelect(select, '__ADD_NEW__', '+ Add Category');
+    const lastOption = select.lastElementChild;
+    lastOption.style.fontStyle = 'italic';
+    lastOption.style.color = '#666';
     
     return select;
 }

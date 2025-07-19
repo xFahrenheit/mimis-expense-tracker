@@ -6,12 +6,10 @@ import { genColors } from './helpers.js';
 export function attachDeleteAllBtnListener() {
     const deleteAllBtn = document.getElementById('deleteAllBtn');
     if (!deleteAllBtn) {
-        console.warn('[ExpenseTracker] Delete All Expenses button not found in DOM when attaching listener.');
         return;
     }
     
     deleteAllBtn.onclick = async () => {
-        console.log('[ExpenseTracker] Delete All Expenses button clicked.');
         if (!confirm('Delete ALL expenses, statements, and overrides? This cannot be undone.')) return;
         
         deleteAllBtn.disabled = true;
@@ -92,7 +90,6 @@ export function setupUploadForm() {
                 try {
                     if (window.createTimePeriodTabs) {
                         await window.createTimePeriodTabs();
-                        console.log('Time period tabs refreshed after upload');
                     }
                 } catch (error) {
                     console.error('Error refreshing time period tabs:', error);

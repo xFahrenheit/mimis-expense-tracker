@@ -41,11 +41,27 @@ export const CHART_COLORS = [
 // Global state variables
 export let allExpenses = [];
 export let filteredExpenses = [];
-// Load sort state from localStorage or use default
-const savedSortState = localStorage.getItem('expense-sort-state');
-export let sortState = savedSortState 
-    ? JSON.parse(savedSortState) 
-    : { column: 'date', direction: -1 }; // 1: asc, -1: desc (default: newest first)
+// Default sort state (newest first)
+export let sortState = { column: 'date', direction: -1 }; // 1: asc, -1: desc (default: newest first)
+
+// Initialize sort state from localStorage if available
+function initializeSortState() {
+    const savedSortState = localStorage.getItem('expense-sort-state');
+    if (savedSortState) {
+        try {
+            const parsedSortState = JSON.parse(savedSortState);
+            if (parsedSortState && parsedSortState.column && parsedSortState.direction) {
+                sortState.column = parsedSortState.column;
+                sortState.direction = parsedSortState.direction;
+            }
+        } catch (e) {
+            console.warn('Invalid sort state in localStorage, using default newest first');
+        }
+    }
+}
+
+// Initialize on module load
+initializeSortState();
 
 // State setters (these mutate the exported variables)
 export const setAllExpenses = (expenses) => { 

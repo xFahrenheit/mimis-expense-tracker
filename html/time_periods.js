@@ -1,6 +1,7 @@
 // Time Period Management - Database-driven and Dynamic
 import { allExpenses, filteredExpenses, setFilteredExpenses } from './config.js';
 import { loadExpenses } from './api.js';
+import { updateAllSpendingDisplays } from './render.js';
 
 let currentPeriodFilter = 'all-time';
 
@@ -42,7 +43,7 @@ function getAvailableTimePeriods(expenses) {
                 years.add(year);
             }
         } catch (error) {
-            console.log('Error parsing date:', expense.date);
+            // Skip invalid dates
         }
     });
 
@@ -81,7 +82,6 @@ async function createTimePeriodTabs() {
         const container = document.getElementById('periodTabsContainer');
         
         if (!container) {
-            console.log('Period tabs container not found');
             return;
         }
 
@@ -126,13 +126,9 @@ async function createTimePeriodTabs() {
         });
 
         container.appendChild(mainTabsRow);
-
-        console.log(`Created ${1 + recentYears.length} main tabs with expandable months`);
         
         // Default to "All Time" and ensure it's properly selected
         await selectTimePeriod('all-time');
-        
-        console.log('Time periods initialized with All Time default');
     } catch (error) {
         console.error('Error creating time period tabs:', error);
     }
@@ -164,18 +160,12 @@ function createPeriodTab(period, displayText, tabType = 'month') {
 
 // Toggle month deck expansion for year tabs
 function toggleMonthDeck(year) {
-    console.log('Toggling month deck for year:', year);
-    
     const monthContainer = document.getElementById(`months-${year}`);
     const yearTab = document.querySelector(`[data-period="${year}"]`);
-    
-    console.log('Month container found:', !!monthContainer);
-    console.log('Year tab found:', !!yearTab);
     
     if (!monthContainer || !yearTab) return;
     
     const isExpanded = monthContainer.classList.contains('expanded');
-    console.log('Currently expanded:', isExpanded);
     
     // Close all other month decks first
     document.querySelectorAll('.month-deck-container').forEach(container => {
@@ -194,7 +184,6 @@ function toggleMonthDeck(year) {
     
     if (isExpanded) {
         // Collapse this deck
-        console.log('Collapsing deck');
         monthContainer.classList.remove('expanded');
         setTimeout(() => {
             monthContainer.style.display = 'none';
@@ -204,7 +193,6 @@ function toggleMonthDeck(year) {
         selectTimePeriod(year);
     } else {
         // Expand this deck
-        console.log('Expanding deck');
         monthContainer.style.display = 'flex';
         yearTab.classList.add('expanded');
         setTimeout(() => {
@@ -231,8 +219,6 @@ async function selectTimePeriod(period) {
 
         // Filter expenses by time period
         await filterExpensesByPeriod(period);
-        
-        console.log('Selected time period:', period);
     } catch (error) {
         console.error('Error selecting time period:', error);
     }
@@ -244,18 +230,12 @@ async function filterExpensesByPeriod(period) {
         const allExpenses = await getExpensesFromDatabase();
         let filteredExpenses;
 
-        console.log(`Filtering by period: ${period}, total expenses available: ${allExpenses.length}`);
-
         if (period === 'all-time') {
             filteredExpenses = allExpenses;
-            console.log(`All Time: showing all ${filteredExpenses.length} expenses`);
         } else if (period.includes('-')) {
-            // Month filter: 2025-01 for January 2025
-            const [year, month] = period.split('-');
-            const targetYear = parseInt(year);
-            const targetMonth = parseInt(month) - 1; // JavaScript months are 0-indexed
-            
-            console.log(`Filtering for period: ${period}, target year: ${targetYear}, target month: ${targetMonth}`);
+                        // Month filter: 2025-01 for January 2025
+            const [targetYear, targetMonth] = period.split('-').map(num => parseInt(num));
+            const adjustedTargetMonth = targetMonth - 1; // Convert to 0-based month
             
             filteredExpenses = allExpenses.filter(expense => {
                 try {
@@ -263,13 +243,8 @@ async function filterExpensesByPeriod(period) {
                     const expenseYear = expenseDate.getFullYear();
                     const expenseMonth = expenseDate.getMonth();
                     
-                    const matches = expenseYear === targetYear && expenseMonth === targetMonth;
-                    if (matches) {
-                        console.log(`Expense ${expense.date} (${expenseYear}-${expenseMonth+1}) matches period ${period}`);
-                    }
-                    return matches;
+                    return expenseYear === targetYear && expenseMonth === adjustedTargetMonth;
                 } catch (error) {
-                    console.error('Error parsing expense date:', expense.date, error);
                     return false;
                 }
             });
@@ -307,8 +282,6 @@ async function filterExpensesByPeriod(period) {
         
         // Update spending totals
         updateSpendingTotals(filteredExpenses);
-        
-        console.log(`Filtered to ${filteredExpenses.length} expenses for period: ${period}`);
     } catch (error) {
         console.error('Error filtering expenses by period:', error);
     }
@@ -319,34 +292,11 @@ function updateSpendingTotals(expenses) {
     try {
         // Safety check for expenses array
         if (!expenses || !Array.isArray(expenses)) {
-            console.log('No expenses provided to updateSpendingTotals, using empty array');
             expenses = [];
         }
         
-        const totalSpending = expenses.reduce((sum, exp) => sum + Math.abs(exp.amount || 0), 0);
-        const gautamiSpending = expenses
-            .filter(exp => (exp.who || '').toLowerCase() === 'gautami')
-            .reduce((sum, exp) => sum + Math.abs(exp.amount || 0), 0);
-        const ameyaSpending = expenses
-            .filter(exp => (exp.who || '').toLowerCase() === 'ameya')
-            .reduce((sum, exp) => sum + Math.abs(exp.amount || 0), 0);
-
-        // Update display elements
-        const totalElement = document.getElementById('totalSpendingValue');
-        const gautamiElement = document.getElementById('gautamiSpendingValue');
-        const ameyaElement = document.getElementById('ameyaSpendingValue');
-
-        if (totalElement) {
-            totalElement.textContent = `$${totalSpending.toFixed(2)}`;
-        }
-        if (gautamiElement) {
-            gautamiElement.textContent = `$${gautamiSpending.toFixed(2)}`;
-        }
-        if (ameyaElement) {
-            ameyaElement.textContent = `$${ameyaSpending.toFixed(2)}`;
-        }
-
-        console.log(`Updated totals - Total: $${totalSpending.toFixed(2)}, Gautami: $${gautamiSpending.toFixed(2)}, Ameya: $${ameyaSpending.toFixed(2)}`);
+        // Use the single source of truth function
+        updateAllSpendingDisplays(expenses);
     } catch (error) {
         console.error('Error updating spending totals:', error);
     }
@@ -367,8 +317,6 @@ async function initializeTimePeriods() {
                 await createTimePeriodTabs();
             });
         }
-        
-        console.log('Time periods initialized successfully with All Time default');
     } catch (error) {
         console.error('Error initializing time periods:', error);
     }
@@ -388,6 +336,5 @@ export {
 };
 
 // Make functions available globally for upload handler and chips
-window.createTimePeriodTabs = createTimePeriodTabs;
 window.selectTimePeriod = selectTimePeriod;
 window.getCurrentPeriodFilter = getCurrentPeriodFilter;
