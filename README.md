@@ -14,9 +14,7 @@ cd expense_tracker
 # Install dependencies
 pip install -r server/requirements.txt
 
-# Start the application
-python server/app.py
-# OR use the sync command (pulls updates and starts server)
+# Pull latest updates and start the server
 ./db_manager.sh sync
 ```
 
