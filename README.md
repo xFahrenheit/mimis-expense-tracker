@@ -14,27 +14,31 @@ cd expense_tracker
 # Install dependencies
 pip install -r server/requirements.txt
 
-# Pull latest updates and start the server
-./db_manager.sh sync
+# Start the application
+cd server && python app.py
 ```
 
-Open `http://localhost:5000` in your browser and start tracking expenses!
+Open `http://127.0.0.1:3001/` in your browser and start tracking expenses!
 
 ## 🔐 Multi-User Setup (Couples/Families)
 
 ### Initial Setup (First User)
 ```bash
-# Set up encryption password
+# 1. Start server and add some expenses first
+cd server && python app.py
+# (Use web interface to add data, then stop server with Ctrl+C)
+
+# 2. Set up encryption password
 ./setup_password.sh
 
-# Encrypt and sync to shared repository
-./db_manager.sh sync
+# 3. Encrypt and upload to shared repository
+./db_manager.sh upload
 ```
 
 ### Second User Setup
 ```bash
 # Clone the shared repository
-git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
+git clone <shared-repo-url>
 cd expense_tracker
 
 # Install dependencies
@@ -43,13 +47,13 @@ pip install -r server/requirements.txt
 # Set up the same encryption password
 ./setup_password.sh
 
-# Download and decrypt database
+# Download, decrypt database and start server
 ./db_manager.sh sync
 ```
 
 ### Daily Workflow
 - **Starting session:** Run `./db_manager.sh sync` (pulls updates and starts server)
-- **Adding expenses:** Use web interface normally
+- **Adding expenses:** Use web interface normally  
 - **Sharing changes:** Click "Save & Push" backup button in web interface (encrypts and uploads to shared repo)
 
 ## ✨ Key Features
@@ -121,6 +125,11 @@ expense_tracker/
 ```
 
 ## 🆘 Troubleshooting
+
+**Forgot your encryption password?**
+- If you have local backups: Check `db_backups/` folder for unencrypted database backups
+- If your partner/family member has access: They can share an unencrypted backup with you
+- Last resort: Start fresh with a new database (you'll lose transaction history)
 
 **Backup button not working?**
 - Ensure `EXPENSE_DB_PASSWORD` environment variable is set

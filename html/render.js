@@ -431,14 +431,25 @@ function renderExpenseRow(tbody, exp) {
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
         try {
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return dateStr;
+            // Parse the date string manually to avoid timezone issues
+            // Input format: "2025-06-01" (YYYY-MM-DD)
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
             
-            const year = date.getFullYear();
-            const month = date.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
-            const day = String(date.getDate()).padStart(2, '0');
+            const year = parseInt(parts[0]);
+            const monthNum = parseInt(parts[1]);
+            const day = parseInt(parts[2]);
             
-            return `${year}-${month}-${day}`;
+            if (isNaN(year) || isNaN(monthNum) || isNaN(day)) return dateStr;
+            
+            // Convert month number to short name
+            const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                              'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const month = monthNames[monthNum - 1];
+            
+            if (!month) return dateStr;
+            
+            return `${year}-${month}-${String(day).padStart(2, '0')}`;
         } catch (error) {
             return dateStr;
         }

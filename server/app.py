@@ -16,6 +16,25 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, methods=["GET", "POST", "DELETE", "PATCH", "OPTIONS"])
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Initialize database on startup
+try:
+    database_service.init_db()
+    print("Database initialized successfully")
+except Exception as e:
+    print(f"Database initialization error: {e}")
+
+# Also initialize on every request if needed
+@app.before_request
+def ensure_database():
+    try:
+        with database_service.get_db_connection() as conn:
+            # Quick check to see if tables exist
+            conn.execute('SELECT COUNT(*) FROM user_overrides LIMIT 1').fetchone()
+    except Exception:
+        # Tables don't exist, initialize database
+        database_service.init_db()
+        print("Database reinitialized due to missing tables")
+
 # --- Utility ---
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
