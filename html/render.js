@@ -2,6 +2,29 @@ import { CATEGORY_META, CATEGORY_LIST, allExpenses } from './config.js';
 import { getCategoryMeta, createCategoryDropdown, handleCategorySelection } from './categories.js';
 import { addExpense, updateExpense, deleteExpense, reimportStatement, bulkDeleteExpenses } from './api.js';
 
+// Utility: Format date as yyyy-month-dd (but keep original date for sorting)
+export function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+        // Parse the date string manually to avoid timezone issues
+        // Input format: "2025-06-01" (YYYY-MM-DD)
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const year = parseInt(parts[0]);
+        const monthNum = parseInt(parts[1]);
+        const day = parseInt(parts[2]);
+        if (isNaN(year) || isNaN(monthNum) || isNaN(day)) return dateStr;
+        // Convert month number to short name
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+                          'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const month = monthNames[monthNum - 1];
+        if (!month) return dateStr;
+        return `${year}-${month}-${String(day).padStart(2, '0')}`;
+    } catch (error) {
+        return dateStr;
+    }
+}
+
 // Render expense table
 export function renderExpenses(expenses) {
     // Update total spending blocks
@@ -427,33 +450,7 @@ function renderExpenseRow(tbody, exp) {
     const splitChecked = exp.split_cost ? 'checked' : '';
     const outlierChecked = exp.outlier ? 'checked' : '';
     
-    // Format date as yyyy-month-dd (but keep original date for sorting)
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '';
-        try {
-            // Parse the date string manually to avoid timezone issues
-            // Input format: "2025-06-01" (YYYY-MM-DD)
-            const parts = dateStr.split('-');
-            if (parts.length !== 3) return dateStr;
-            
-            const year = parseInt(parts[0]);
-            const monthNum = parseInt(parts[1]);
-            const day = parseInt(parts[2]);
-            
-            if (isNaN(year) || isNaN(monthNum) || isNaN(day)) return dateStr;
-            
-            // Convert month number to short name
-            const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                              'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-            const month = monthNames[monthNum - 1];
-            
-            if (!month) return dateStr;
-            
-            return `${year}-${month}-${String(day).padStart(2, '0')}`;
-        } catch (error) {
-            return dateStr;
-        }
-    };
+    // ...existing code...
     
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -581,6 +578,7 @@ function setupRowListeners(tr, exp) {
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async (e) => {
             if (confirm('Delete this row?')) {
+                if (window.pushUndoState) window.pushUndoState();
                 await deleteExpense(exp.id);
                 // Reload data from server to ensure consistency
                 if (window.loadExpenses) {
@@ -615,35 +613,42 @@ function setupInlineEditing(tbody, expenses) {
                 value = whoSelect && whoSelect.value;
                 if (value === '__custom__' && whoCustom) {
                     value = whoCustom.value.trim();
-                    // Add to dropdown for future use
                     if (whoSelect) addOptionToSelect(whoSelect, value);
                 }
             } else if (field === 'category') {
                 const catSelect = editingCell.querySelector('.edit-inline-category');
                 value = catSelect && catSelect.value;
+            } else if (field === 'description') {
+                value = (lastTypedValue !== null && lastTypedValue !== undefined) ? lastTypedValue.trim() : '';
             } else {
                 const input = editingCell.querySelector('input,select');
                 value = input && input.value;
             }
             if (exp && value !== undefined) {
+                // For description, only save if not empty; otherwise restore original
+                if (field === 'description' && !value) {
+                    editingCell.innerHTML = originalContent;
+                    editingCell.classList.remove('editing-cell');
+                    editingCell = null;
+                    originalContent = '';
+                    return;
+                }
                 didSave = true;
-                // Don't immediately re-render the cell, just leave it in edit mode until the backend confirms
                 saveInlineEdit(editingCell, exp, field, value, true);
-                return; // Don't exit edit mode yet
+                return;
             }
         }
-        // Only re-render cell if not saving (to avoid flicker/old value overwrite)
         if (!didSave) {
             editingCell.innerHTML = originalContent;
             editingCell.classList.remove('editing-cell');
             editingCell = null;
             originalContent = '';
         }
-        // If didSave, do not exit edit mode here; let saveInlineEdit handle it after backend update
     }
 
     // saveInlineEdit function
     async function saveInlineEdit(cell, exp, field, value, closeCellAfter = false) {
+        if (window.pushUndoState) window.pushUndoState();
         const { API_URL } = await import('./config.js');
         
         // First, update the cell display immediately
@@ -691,10 +696,7 @@ function setupInlineEditing(tbody, expenses) {
             if (filteredExp) filteredExp[field] = value;
         }
         
-        // Reload data from server to ensure consistency after edits
-        if (window.loadExpenses) {
-            await window.loadExpenses();
-        }
+        // Do not reload data from server here; allow undo/redo to work on local state
         
         // Update spending totals and refresh displays
         if (window.applyColumnFilters) {
@@ -711,6 +713,9 @@ function setupInlineEditing(tbody, expenses) {
         }
     }
 
+    let lastEditValue = null;
+    let activeInput = null;
+    let lastTypedValue = null;
     tbody.querySelectorAll('.editable-cell').forEach(cell => {
         cell.addEventListener('click', async (e) => {
             if (editingCell && editingCell !== cell) {
@@ -718,11 +723,14 @@ function setupInlineEditing(tbody, expenses) {
             }
             if (cell.classList.contains('editing-cell')) return;
             editingCell = cell;
-            originalContent = cell.innerHTML;
+            // Always cache the original value for robust restoration
+            lastEditValue = cell.textContent;
             cell.classList.add('editing-cell');
             const id = cell.getAttribute('data-id');
             const field = cell.getAttribute('data-field');
-            const exp = expenses.find(e => e.id == id);
+            // Use == for id match, fallback to cell text if not found
+            let exp = expenses.find(e => e.id == id);
+            let inputValue = (exp && exp[field] !== undefined && exp[field] !== null) ? exp[field] : cell.textContent;
             let inputHtml = '';
             
             if (field === 'category') {
@@ -763,10 +771,17 @@ function setupInlineEditing(tbody, expenses) {
                 </select>
                 <input type="text" class="edit-inline-who-custom w-full px-1 py-1 rounded text-xs mt-1" placeholder="Enter name" style="display:${(whoVal!=='Ameya'&&whoVal!=='Gautami')?'':'none'};" value="${(whoVal!=='Ameya'&&whoVal!=='Gautami')?whoVal:''}" />`;
             } else {
-                inputHtml = `<input type="text" class="edit-inline-${field} w-full px-1 py-1 rounded text-xs" value="${exp[field] || ''}" />`;
+                inputHtml = `<input type="text" class="edit-inline-${field} w-full px-1 py-1 rounded text-xs" value="${inputValue || ''}" />`;
             }
             cell.innerHTML = inputHtml;
             const input = cell.querySelector('input,select');
+            activeInput = input;
+            if (field === 'description') {
+                lastTypedValue = input.value;
+                input.addEventListener('input', () => {
+                    lastTypedValue = input.value;
+                });
+            }
             if (field === 'who') {
                 const whoSelect = cell.querySelector('.edit-inline-who');
                 const whoCustom = cell.querySelector('.edit-inline-who-custom');
@@ -785,16 +800,30 @@ function setupInlineEditing(tbody, expenses) {
             
             // Save on blur or enter
             input.addEventListener('blur', () => {
+                // Only handle blur if this cell is still the active editingCell and input is still the active input
+                if (cell !== editingCell || input !== activeInput) return;
                 if (field === 'who') {
                     const whoSelect = cell.querySelector('.edit-inline-who');
                     const whoCustom = cell.querySelector('.edit-inline-who-custom');
                     let whoVal = whoSelect.value;
                     if (whoVal === '__custom__') {
                         whoVal = whoCustom.value.trim();
-                        // Add to dropdown for future use
                         addOptionToSelect(whoSelect, whoVal);
                     }
                     saveInlineEdit(cell, exp, field, whoVal);
+                } else if (field === 'description') {
+                    const val = (lastTypedValue !== null && lastTypedValue !== undefined) ? lastTypedValue.trim() : input.value.trim();
+                    console.debug('Inline edit save (blur):', { val });
+                    if (!val) {
+                        // If description is empty, restore from cached value and do NOT save
+                        cell.textContent = lastEditValue || '';
+                        cell.classList.remove('editing-cell');
+                        editingCell = null;
+                        originalContent = '';
+                        return;
+                    }
+                    // Only save if not empty
+                    saveInlineEdit(cell, exp, field, val);
                 } else {
                     saveInlineEdit(cell, exp, field, input.value);
                 }
@@ -802,6 +831,8 @@ function setupInlineEditing(tbody, expenses) {
             
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
+                    // Only handle Enter if this cell is still the active editingCell and input is still the active input
+                    if (cell !== editingCell || input !== activeInput) return;
                     if (field === 'who') {
                         const whoSelect = cell.querySelector('.edit-inline-who');
                         const whoCustom = cell.querySelector('.edit-inline-who-custom');
@@ -811,6 +842,19 @@ function setupInlineEditing(tbody, expenses) {
                             addOptionToSelect(whoSelect, whoVal);
                         }
                         saveInlineEdit(cell, exp, field, whoVal);
+                    } else if (field === 'description') {
+                        const val = (lastTypedValue !== null && lastTypedValue !== undefined) ? lastTypedValue.trim() : input.value.trim();
+                        console.debug('Inline edit save (enter):', { val });
+                        if (!val) {
+                            // If description is empty, restore from cached value and do NOT save
+                            cell.textContent = lastEditValue || '';
+                            cell.classList.remove('editing-cell');
+                            editingCell = null;
+                            originalContent = '';
+                            return;
+                        }
+                        // Only save if not empty
+                        saveInlineEdit(cell, exp, field, val);
                     } else {
                         saveInlineEdit(cell, exp, field, input.value);
                     }

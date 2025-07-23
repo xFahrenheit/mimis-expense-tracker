@@ -68,8 +68,10 @@ export function setupUploadForm() {
     
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const formData = new FormData(uploadForm);
+        // Push undo state BEFORE upload (so undo removes the upload)
+        if (window.pushUndoState) window.pushUndoState();
 
+        const formData = new FormData(uploadForm);
         // Extract bank type from selected card option
         const cardSelect = document.getElementById('cardSelect');
         if (cardSelect && cardSelect.selectedOptions.length > 0) {
@@ -77,7 +79,6 @@ export function setupUploadForm() {
             const bankType = selectedOption.getAttribute('data-bank') || 'generic';
             formData.set('bank_type', bankType);
         }
-
 
         // Show loading banner and disable upload button
         const loadingBanner = document.getElementById('globalLoadingBanner');
@@ -104,7 +105,8 @@ export function setupUploadForm() {
             uploadForm.reset();
             if (window.loadStatements) await window.loadStatements();
             if (window.loadExpenses) await window.loadExpenses();
-
+            // Save undo state again after upload (so redo works)
+            if (window.pushUndoState) window.pushUndoState();
             // Refresh time period tabs after successful upload
             setTimeout(async () => {
                 try {

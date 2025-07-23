@@ -909,41 +909,34 @@ def parse_amazon_visa_statement(filepath):
                 
                 if match:
                     date_str, description, amount_str = match.groups()
-                    print(f"Amazon Pattern 1 matched: {date_str} | {description} | {amount_str}")
-                    try:
-                        # Convert MM/DD to current year
-                        month, day = date_str.split('/')
-                        current_year = datetime.now().year
-                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        print(f"Amazon date conversion: {date_str} -> {date}")
-                        
-                        # Clean amount - handle negative amounts (payments)
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        
-                        # Skip payments (negative amounts)
-                        if amount < 0:
-                            print(f"Skipping payment: {description.strip()}")
+                    match = re.match(pattern1, line)
+                    if match:
+                        date_str, description, amount_str = match.groups()
+                        print(f"Amazon Pattern 1 matched: {date_str} | {description} | {amount_str}")
+                        try:
+                            # Convert MM/DD to current year
+                            month, day = date_str.split('/')
+                            current_year = datetime.now().year
+                            date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
+                            print(f"Amazon date conversion: {date_str} -> {date}")
+                            # Clean amount - handle negative amounts (payments)
+                            amount = float(re.sub(r'[^\d.-]', '', amount_str))
+                            # Skip payments (negative amounts)
+                            if amount < 0:
+                                print(f"Skipping payment: {description.strip()}")
+                                continue
+                            amount = abs(amount)  # Ensure positive
+                            # Clean description - remove extra spaces
+                            description_clean = re.sub(r'\s+', ' ', description.strip())
+                            rows.append({
+                                'date': date,
+                                'description': description_clean,
+                                'amount': amount,
+                                'card': 'Amazon'
+                            })
                             continue
-                        
-                        amount = abs(amount)  # Ensure positive
-                        
-                        # Clean description - remove extra spaces
-                        description_clean = re.sub(r'\s+', ' ', description.strip())
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description_clean,
-                            'amount': amount,
-                            'card': 'Amazon'
-                        })
-                        continue
-                    except Exception as e:
-                        print(f"Error parsing Amazon pattern 1: {line}, Error: {e}")
-                
-                # Pattern 2: MM/DD DESCRIPTION $AMOUNT (with dollar sign)
-                pattern2 = r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?\$[\d,]+\.?\d{2})$'
-                match = re.match(pattern2, line)
+                        except Exception as e:
+                            print(f"Error parsing Amazon pattern 1: {line}, Error: {e}")
                 
                 if match:
                     date_str, description, amount_str = match.groups()

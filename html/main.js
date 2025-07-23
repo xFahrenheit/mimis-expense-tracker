@@ -1,4 +1,80 @@
 // Main application entry point
+
+// === Undo/Redo Stack ===
+const undoStack = [];
+const redoStack = [];
+
+function getAppStateSnapshot() {
+    // Capture all relevant state: expenses, statements, filters, sort, etc.
+    return {
+        expenses: JSON.parse(JSON.stringify(window.allExpenses || [])),
+        statements: JSON.parse(JSON.stringify(window.statementsList || [])),
+        filters: {
+            category: document.getElementById('filter-category')?.value || '',
+            card: document.getElementById('filter-card')?.value || '',
+            who: document.getElementById('filter-who')?.value || '',
+            needcat: document.getElementById('filter-needcat')?.value || ''
+        },
+        sortState: JSON.parse(JSON.stringify(window.sortState || {})),
+    };
+}
+
+function restoreAppState(state) {
+    if (!state) return;
+    // Restore expenses
+    if (window.setAllExpenses) window.setAllExpenses(state.expenses);
+    if (window.setFilteredExpenses) window.setFilteredExpenses(state.expenses);
+    // Restore statements (if available)
+    if (state.statements && window.renderStatements) window.renderStatements(state.statements);
+    // Restore filters
+    if (state.filters) {
+        if (document.getElementById('filter-category')) document.getElementById('filter-category').value = state.filters.category;
+        if (document.getElementById('filter-card')) document.getElementById('filter-card').value = state.filters.card;
+        if (document.getElementById('filter-who')) document.getElementById('filter-who').value = state.filters.who;
+        if (document.getElementById('filter-needcat')) document.getElementById('filter-needcat').value = state.filters.needcat;
+    }
+    // Restore sort
+    if (state.sortState && window.setSortState) window.setSortState(state.sortState);
+    // Re-render UI
+    if (window.applyColumnFilters) window.applyColumnFilters();
+    if (window.renderCharts) window.renderCharts(state.expenses);
+    if (window.renderFilters) window.renderFilters(state.expenses);
+    if (window.updateSpendingBlocks) window.updateSpendingBlocks(state.expenses);
+    if (window.createTimePeriodTabs) window.createTimePeriodTabs();
+}
+
+function pushUndoState() {
+    undoStack.push(getAppStateSnapshot());
+    // Clear redo stack on new action
+    redoStack.length = 0;
+}
+
+function undo() {
+    if (undoStack.length === 0) return;
+    const current = getAppStateSnapshot();
+    redoStack.push(current);
+    const prev = undoStack.pop();
+    restoreAppState(prev);
+}
+
+function redo() {
+    if (redoStack.length === 0) return;
+    const current = getAppStateSnapshot();
+    undoStack.push(current);
+    const next = redoStack.pop();
+    restoreAppState(next);
+}
+
+// Keyboard shortcuts for undo/redo
+window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undo();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+        e.preventDefault();
+        redo();
+    }
+});
 import { setAllExpenses, setFilteredExpenses, setSortState } from './config.js';
 import { loadExpenses, loadStatements } from './api.js';
 import { renderCharts } from './charts.js';
@@ -19,28 +95,24 @@ async function loadExpensesMain() {
     const expenses = await loadExpenses();
     setAllExpenses(expenses);
     setFilteredExpenses(expenses);
-    
     // Force sort to newest first on load
     setSortState({ column: 'date', direction: -1 });
-    
-    // Don't render here - let initializeTimePeriods handle the initial render
-    // This ensures consistency with "All Time" behavior
-    
     // Apply initial sorting (by date, newest first)
     applyColumnFilters();
-    
-    // Update sort arrows to reflect current state
     updateSortArrows();
-    
-    // Render filters and charts (but not expenses table)
     renderFilters(expenses);
     renderCharts(expenses);
+    // Save state after loading
+    window.allExpenses = expenses;
+    pushUndoState();
 }
 
 // Main load function for statements
 async function loadStatementsMain() {
     const statements = await loadStatements();
+    window.statementsList = statements;
     renderStatements(statements);
+    pushUndoState();
 }
 
 // Update spending summary blocks
@@ -206,6 +278,7 @@ window.renderCharts = renderCharts;
 window.renderFilters = renderFilters;
 window.applyColumnFilters = applyColumnFilters;
 window.updateSpendingBlocks = updateSpendingBlocks;
+window.pushUndoState = pushUndoState;
 
 // Expose time period functions
 window.createTimePeriodTabs = createTimePeriodTabs;
