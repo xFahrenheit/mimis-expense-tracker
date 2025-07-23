@@ -39,18 +39,18 @@ export function renderFilters(expenses) {
     // Populate dropdowns for category, card, who
     const categories = [...new Set(expenses.map(e => e.category).filter(Boolean))];
     const cards = [...new Set(expenses.map(e => e.card).filter(Boolean))];
-    // Always show Gautami, Ameya, Other in Who filter, plus any others present
-    const defaultWhos = ['Gautami', 'Ameya', 'Other'];
-    const whos = Array.from(new Set([...defaultWhos, ...expenses.map(e => e.who).filter(Boolean)]));
-    
+    // Use dynamic household members for Who filter
+    const memberNames = (window.householdMembers || []).map(m => m.name);
+    const whos = Array.from(new Set([...memberNames, ...expenses.map(e => e.who).filter(Boolean), 'Other']));
+
     const categoryFilter = document.getElementById('filter-category');
     const cardFilter = document.getElementById('filter-card');
     const whoFilter = document.getElementById('filter-who');
-    
+
     if (categoryFilter) categoryFilter.innerHTML = '<option value="">All</option>' + categories.map(c => `<option value="${c}">${c}</option>`).join('');
     if (cardFilter) cardFilter.innerHTML = '<option value="">All</option>' + cards.map(c => `<option value="${c}">${c}</option>`).join('');
     if (whoFilter) whoFilter.innerHTML = '<option value="">All</option>' + whos.map(w => `<option value="${w}">${w}</option>`).join('');
-    
+
     // Setup autofill button listeners
     setTimeout(() => {
         setupAutofillButtons();
@@ -133,30 +133,32 @@ export function renderQuickFilterChips(expenses) {
     topN(whoCounts,2).forEach(c=>chips.push({type:'who',label:c}));
     ['Need','Luxury'].forEach(n=>chips.push({type:'need_category',label:n}));
     
-    // Emoji map for chips
+    // Emoji map for chips, now includes dynamic members
     const emojiMap = {
         'groceries': '🛒', 'food': '🍽️', 'shopping': '🛍️', 'travel': '✈️', 'utilities': '💡',
         'health': '🩺', 'entertainment': '🎬', 'subscriptions': '📦', 'transport': '🚗',
         'rent': '🏠', 'other': '❓', 'chase sapphire': '💳', 'venture x': '💳',
-        'discover': '💳', 'Gautami': '👩', 'Ameya': '👨', 'Need': '🟢', 'Luxury': '💎',
+        'discover': '💳', 'Need': '🟢', 'Luxury': '💎',
     };
-    
+    // Add member emojis
+    (window.householdMembers || []).forEach(m => { emojiMap[m.name] = m.emoji; });
+
     chips.forEach(chip => {
         const btn = document.createElement('button');
         btn.className = 'quick-chip';
-        
+
         let lowerLabel = chip.label?.toLowerCase();
-        let emoji = emojiMap[lowerLabel] || emojiMap[chip.label] || '';
-        let isCustom = ['venture x','gautami','ameya'].includes(lowerLabel);
+        let emoji = emojiMap[chip.label] || emojiMap[lowerLabel] || '';
+        let isCustom = ['venture x'].includes(lowerLabel);
         btn.textContent = isCustom ? chip.label : (emoji ? `${emoji}` : chip.label);
         btn.title = chip.label;
-        
+
         // Hover effects for non-custom chips
         if (!isCustom && emoji) {
             btn.onmouseenter = () => btn.textContent = chip.label;
             btn.onmouseleave = () => btn.textContent = emoji;
         }
-        
+
         btn.onclick = () => {
             let filterId;
             if (chip.type === 'need_category') {
@@ -170,7 +172,7 @@ export function renderQuickFilterChips(expenses) {
                 if (window.applyColumnFilters) window.applyColumnFilters();
             }
         };
-        
+
         chipDiv.appendChild(btn);
     });
     
@@ -238,78 +240,122 @@ export function addOptionToSelect(select, value, text, isSelected = false) {
     select.appendChild(option);
 }
 
-// SINGLE SOURCE OF TRUTH: Update all spending displays with consistent formatting
+// Household member config (to be replaced by UI/config file)
+let householdMembers = window.householdMembers || [
+    { name: 'Member 1', emoji: '👤', color: '#6cbda0', id: 'member1' }
+];
+// Always use window.householdMembers for dynamic UI
+Object.defineProperty(window, 'householdMembers', {
+    get() {
+        if (!this._householdMembers) {
+            this._householdMembers = [
+                { name: 'Member 1', emoji: '👤', color: '#6cbda0', id: 'member1' }
+            ];
+        }
+        return this._householdMembers;
+    },
+    set(val) {
+        this._householdMembers = val;
+    },
+    configurable: true
+});
+
+// Update all spending displays dynamically for each member
 export function updateAllSpendingDisplays(expenses) {
-    const { total, gautami, ameya, splitTotal } = calculateSpendingTotals(expenses);
-    
+    const { total, memberTotals, splitTotal } = calculateSpendingTotalsDynamic(expenses);
+
     // Calculate additional metrics
     const days = new Set(expenses.map(e => e.date)).size || 1;
     const months = new Set(expenses.map(e => (e.date||'').slice(0,7))).size || 1;
-    
+
     // Consistent formatting function
     const formatCurrency = (amount) => `$${amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    
-    // Update all spending elements with consistent formatting
-    const elements = {
-        'totalSpendingValue': formatCurrency(total),
-        'gautamiSpendingValue': formatCurrency(gautami),
-        'ameyaSpendingValue': formatCurrency(ameya),
-        'splitSpendingValue': formatCurrency(splitTotal / 2),
-        'avgPerDay': `${formatCurrency(total / days).replace('$', '')}/day`,
-        'avgPerMonth': `${formatCurrency(total / months).replace('$', '')}/mo`
-    };
-    
-    Object.entries(elements).forEach(([id, text]) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = text;
+
+    // Update total spending
+    const totalEl = document.getElementById('totalSpendingValue');
+    if (totalEl) totalEl.textContent = formatCurrency(total);
+
+    // Remove old member blocks
+    const memberBlock = document.getElementById('householdSpendingBlock');
+    if (memberBlock) memberBlock.innerHTML = '';
+
+    // Render each member's spending
+    (window.householdMembers || []).forEach(member => {
+        let el = document.getElementById(`${member.id}SpendingValue`);
+        if (!el && memberBlock) {
+            // Create element if not present
+            el = document.createElement('div');
+            el.id = `${member.id}SpendingValue`;
+            el.className = 'total-spending-value';
+            const label = document.createElement('div');
+            label.className = 'total-spending-label';
+            label.textContent = `${member.emoji} ${member.name}'s Spending`;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex flex-col items-center md:items-start';
+            wrapper.appendChild(label);
+            wrapper.appendChild(el);
+            memberBlock.appendChild(wrapper);
+        }
+        if (el) el.textContent = formatCurrency(memberTotals[member.name] || 0);
     });
-    
-    return { total, gautami, ameya, splitTotal };
+
+    // Update averages
+    const avgDay = document.getElementById('avgPerDay');
+    const avgMonth = document.getElementById('avgPerMonth');
+    if (avgDay) avgDay.textContent = `${formatCurrency(total / days).replace('$', '')}/day`;
+    if (avgMonth) avgMonth.textContent = `${formatCurrency(total / months).replace('$', '')}/mo`;
+
+    return { total, memberTotals, splitTotal };
+}
+
+// Calculate spending totals for dynamic members
+export function calculateSpendingTotalsDynamic(expenses) {
+    const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const memberTotals = {};
+    let splitTotal = 0;
+
+    // Always use the current dynamic household
+    const members = (window.householdMembers || []);
+    members.forEach(m => { memberTotals[m.name] = 0; });
+
+    expenses.forEach(e => {
+        const amount = Number(e.amount || 0);
+        if (e.split_cost) {
+            // Split cost: divide among all members
+            const splitAmount = members.length > 0 ? amount / members.length : 0;
+            members.forEach(m => { memberTotals[m.name] += splitAmount; });
+            splitTotal += amount;
+        } else {
+            const who = (e.who || '').toString().trim();
+            if (memberTotals.hasOwnProperty(who)) {
+                memberTotals[who] += amount;
+            }
+        }
+    });
+
+    return { total, memberTotals, splitTotal };
 }
 
 // Shared utility to calculate spending totals with split cost logic
 export function calculateSpendingTotals(expenses) {
+    // Legacy function: now replaced by calculateSpendingTotalsDynamic. Kept for backward compatibility, but returns only total and splitTotal.
     const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    let gautami = 0;
-    let ameya = 0;
     let splitTotal = 0;
-    
     expenses.forEach(e => {
         const amount = Number(e.amount || 0);
-        
         if (e.split_cost) {
-            // Split cost: each person gets half
-            const splitAmount = amount / 2;
-            gautami += splitAmount;
-            ameya += splitAmount;
             splitTotal += amount;
-        } else {
-            const who = (e.who || '').toString().trim().toLowerCase();
-            if (who === 'gautami') {
-                gautami += amount;
-            } else if (who === 'ameya') {
-                ameya += amount;
-            }
         }
     });
-    
-    return { 
-        total, 
-        gautami, 
-        ameya, 
-        splitTotal,
-        // Aliases for backward compatibility
-        gautamiTotal: gautami,
-        ameyaTotal: ameya
-    };
+    return { total, splitTotal };
 }
 
 function createWhoSelect(currentValue = '', className = 'w-full px-1 py-1 rounded text-xs') {
-    const isCustomValue = currentValue && !['Ameya', 'Gautami'].includes(currentValue);
+    const memberNames = (window.householdMembers || []).map(m => m.name);
+    const isCustomValue = currentValue && !memberNames.includes(currentValue);
     return `
         <select class="${className}" data-who-select>
-            <option value="Ameya" ${currentValue === 'Ameya' ? 'selected' : ''}>Ameya</option>
-            <option value="Gautami" ${currentValue === 'Gautami' ? 'selected' : ''}>Gautami</option>
+            ${memberNames.map(n => `<option value="${n}" ${currentValue === n ? 'selected' : ''}>${n}</option>`).join('')}
             <option value="__custom__" ${isCustomValue ? 'selected' : ''}>Other...</option>
         </select>
         <input type="text" class="${className} mt-1" data-who-custom 
@@ -470,7 +516,7 @@ function renderExpenseRow(tbody, exp) {
         </td>
         <td class="py-2 px-3 editable-cell" data-field="need_category" data-id="${exp.id}" style="text-align:center;"><span class="${needBadgeClass}">${needCat}</span></td>
         <td class="py-2 px-3 editable-cell" data-field="card" data-id="${exp.id}">${exp.card || ''}</td>
-        <td class="py-2 px-3 editable-cell" data-field="who" data-id="${exp.id}">${(exp.who === 'Ameya' || exp.who === 'Gautami') ? exp.who : (exp.who ? `<span class='custom-who'>${exp.who}</span>` : '')}</td>
+        <td class="py-2 px-3 editable-cell" data-field="who" data-id="${exp.id}">${exp.who ? `<span class='custom-who'>${exp.who}</span>` : ''}</td>
         <td class="py-2 px-3 text-center"><input type="checkbox" class="split-checkbox" data-id="${exp.id}" ${splitChecked}></td>
         <td class="py-2 px-3 text-center"><input type="checkbox" class="outlier-checkbox" data-id="${exp.id}" ${outlierChecked}></td>
         <td class="py-2 px-3 editable-cell" data-field="notes" data-id="${exp.id}">${exp.notes || ''}</td>
@@ -494,7 +540,7 @@ function setupManualEntryListeners(addTr) {
         });
     });
     
-    // Setup who select logic
+    // Setup who select logic (dynamic household members)
     const whoContainer = addTr.querySelector('#manual-who-container');
     const whoSelectLogic = setupWhoSelectLogic(whoContainer);
     
@@ -516,7 +562,9 @@ function setupManualEntryListeners(addTr) {
             return;
         }
         
-        if (who && !['Ameya', 'Gautami'].includes(who)) {
+        // Add custom option if not in household members
+        const memberNames = (window.householdMembers || []).map(m => m.name);
+        if (who && !memberNames.includes(who)) {
             whoSelectLogic.addCustomOption(who);
         }
         
@@ -653,7 +701,9 @@ function setupInlineEditing(tbody, expenses) {
             } else if (field === 'date') {
                 cell.textContent = formatDate(value);
             } else if (field === 'who') {
-                cell.innerHTML = (value === 'Ameya' || value === 'Gautami') ? value : (value ? `<span class='custom-who'>${value}</span>` : '');
+                // Show as plain text if in household, else as custom
+                const memberNames = (window.householdMembers || []).map(m => m.name);
+                cell.innerHTML = memberNames.includes(value) ? value : (value ? `<span class='custom-who'>${value}</span>` : '');
             } else if (field === 'category') {
                 const { getCategoryMeta } = await import('./categories.js');
                 const meta = getCategoryMeta(value);
@@ -754,14 +804,15 @@ function setupInlineEditing(tbody, expenses) {
             } else if (field === 'date') {
                 inputHtml = `<input type="date" class="edit-inline-date w-full px-1 py-1 rounded text-xs" value="${exp.date || ''}" />`;
             } else if (field === 'who') {
-                // Spender edit: dropdown with Ameya, Gautami, or custom
+                // Spender edit: dropdown with dynamic household members or custom
                 let whoVal = exp.who || '';
+                const memberNames = (window.householdMembers || []).map(m => m.name);
+                const isCustom = whoVal && !memberNames.includes(whoVal);
                 inputHtml = `<select class="edit-inline-who w-full px-1 py-1 rounded text-xs">
-                    <option value="Ameya" ${whoVal==='Ameya'?'selected':''}>Ameya</option>
-                    <option value="Gautami" ${whoVal==='Gautami'?'selected':''}>Gautami</option>
-                    <option value="__custom__" ${(whoVal!=='Ameya'&&whoVal!=='Gautami')?'selected':''}>Other...</option>
+                    ${memberNames.map(n => `<option value="${n}" ${whoVal===n?'selected':''}>${n}</option>`).join('')}
+                    <option value="__custom__" ${isCustom?'selected':''}>Other...</option>
                 </select>
-                <input type="text" class="edit-inline-who-custom w-full px-1 py-1 rounded text-xs mt-1" placeholder="Enter name" style="display:${(whoVal!=='Ameya'&&whoVal!=='Gautami')?'':'none'};" value="${(whoVal!=='Ameya'&&whoVal!=='Gautami')?whoVal:''}" />`;
+                <input type="text" class="edit-inline-who-custom w-full px-1 py-1 rounded text-xs mt-1" placeholder="Enter name" style="display:${isCustom?'':'none'};" value="${isCustom?whoVal:''}" />`;
             } else {
                 inputHtml = `<input type="text" class="edit-inline-${field} w-full px-1 py-1 rounded text-xs" value="${exp[field] || ''}" />`;
             }

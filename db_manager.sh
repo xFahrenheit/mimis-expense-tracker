@@ -3,8 +3,14 @@
 # Expense Tracker Database Manager
 # Usage: ./db_manager.sh [sync|upload|status|backup]
 
-DB_FILE="server/expense_tracker.db"
-ENCRYPTED_FILE="expense_tracker_encrypted.db"
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH_NAME" = "custom-user" ]; then
+    DB_FILE="server/expense_tracker_custom_user.db"
+    ENCRYPTED_FILE="expense_tracker_encrypted_custom_user.db"
+else
+    DB_FILE="server/expense_tracker.db"
+    ENCRYPTED_FILE="expense_tracker_encrypted.db"
+fi
 BACKUP_DIR="db_backups"
 
 # Create backup directory if it doesn't exist

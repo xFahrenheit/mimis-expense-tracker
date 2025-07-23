@@ -528,7 +528,6 @@ def parse_venturex_statement(filepath):
     """
     Parse Capital One Venture X statements
     VentureX typically has transactions in a specific format:
-    - Multiple cardholders (AMEYA GODBOLE #1646, GAUTAMI LANGARKANDE #1153)
     - Trans Date | Post Date | Description | Amount format
     - Separate sections for each cardholder
     """

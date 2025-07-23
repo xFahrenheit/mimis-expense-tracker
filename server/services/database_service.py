@@ -1,11 +1,26 @@
+
 import sqlite3
 from contextlib import contextmanager
+import os
+import subprocess
 try:
     from category_examples import CATEGORY_EXAMPLES
 except ImportError:
     CATEGORY_EXAMPLES = {}
 
-DB_PATH = '/Users/gautami/expense_tracker/server/expense_tracker.db'
+# Dynamically select DB path based on git branch
+def get_db_path():
+    branch = os.environ.get('EXPENSE_TRACKER_BRANCH')
+    if not branch:
+        try:
+            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=os.path.dirname(__file__)+'/../..').decode().strip()
+        except Exception:
+            branch = 'main'
+    if branch == 'custom-user':
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '../expense_tracker_custom_user.db'))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '../expense_tracker.db'))
+
+DB_PATH = get_db_path()
 
 @contextmanager
 def get_db_connection():

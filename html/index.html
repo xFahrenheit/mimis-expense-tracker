@@ -20,9 +20,39 @@
     <div class="w-full p-0 m-0" style="padding-left:18px; padding-right:18px;">
         <div class="logo-banner mb-8 flex justify-between items-center">
             <img src="logo.jpg" alt="Expense Tracker" class="logo-background" />
-            <button id="backupPushBtn" class="btn-backup">
-                💾 Backup & Push
-            </button>
+            <div class="flex gap-2">
+                <button id="manageHouseholdBtn" class="btn-pastel">
+                    👥 Manage Household
+                </button>
+                <button id="backupPushBtn" class="btn-backup">
+                    💾 Backup & Push
+                </button>
+            </div>
+        </div>
+
+        <!-- Household Management Modal -->
+        <div id="householdModal" class="fixed inset-0 z-50 hidden">
+            <div class="fixed inset-0 bg-black opacity-30 z-40"></div>
+            <div class="flex items-center justify-center min-h-screen w-full fixed inset-0 z-50">
+                <div class="bg-white rounded-lg shadow-lg p-8 max-w-xl w-full border-2 border-mint text-center z-50">
+                    <div class="text-xl font-semibold text-mint mb-2">Manage Household</div>
+                    <div id="householdMemberList" class="mb-4"></div>
+                    <form id="addMemberForm" class="flex flex-col md:flex-row gap-2 mb-2 items-center justify-center">
+                        <input id="newMemberName" type="text" class="rounded px-2 py-1 border" placeholder="Name" required style="min-width:90px;" />
+                        <input id="newMemberEmoji" type="text" class="rounded px-2 py-1 border" placeholder="Emoji" maxlength="2" style="width:50px;" />
+                        <input id="newMemberColor" type="color" class="rounded px-2 py-1 border" value="#6cbda0" style="width:40px; padding:0;" />
+                        <button type="submit" class="btn-pastel">Add Member</button>
+                    </form>
+                    <div class="font-semibold text-gray-600 mb-1">Custom Presets</div>
+                    <div class="flex flex-wrap gap-2 mb-2 justify-center">
+                        <button class="btn-pastel" data-preset="couple">👫 Couple</button>
+                        <button class="btn-pastel" data-preset="roommates">🏠 Roommates</button>
+                        <button class="btn-pastel" data-preset="family">👨‍👩‍👧‍👦 Family</button>
+                        <button class="btn-pastel" data-preset="friends">👥 Friends</button>
+                    </div>
+                    <button id="closeHouseholdModal" class="btn-pastel-red w-full mt-2">Close</button>
+                </div>
+            </div>
         </div>
         <!-- Global Loading Banner -->
         <div id="globalLoadingBanner" class="fixed top-0 left-0 w-full z-50 hidden">
@@ -103,16 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <span id="avgPerDay">$0/day</span> &middot; <span id="avgPerMonth">$0/mo</span>
                         </div>
                     </div>
-                    <div class="flex flex-row items-center md:items-end gap-4 ml-auto">
-                        <div class="flex flex-col items-center md:items-start">
-                            <div class="total-spending-label">Gautami's Spending</div>
-                            <div id="gautamiSpendingValue" class="total-spending-value">$0</div>
-                        </div>
-                        <div class="flex flex-col items-center md:items-start">
-                            <div class="total-spending-label">Ameya's Spending</div>
-                            <div id="ameyaSpendingValue" class="total-spending-value">$0</div>
-                        </div>
-                    </div>
+                    <div id="householdSpendingBlock" class="flex flex-row items-center md:items-end gap-4 ml-auto"></div>
                 </div>
                 <!-- Quick Filter Chips -->
                 <div id="quickFilterChips" class="quick-filter-chips flex flex-wrap gap-2 mb-2"></div>

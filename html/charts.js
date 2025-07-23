@@ -302,19 +302,27 @@ function renderNeedLuxuryChart(expenses) {
 
 // Render spender comparison pie chart
 function renderSpenderChart(expenses) {
-    const spenderTotals = { Gautami: 0, Ameya: 0 };
+    // Dynamic spender chart using household members
+    const members = (window.householdMembers || []);
+    const spenderTotals = {};
+    members.forEach(m => { spenderTotals[m.name] = 0; });
     expenses.forEach(e => {
-        if (e.split_cost) {
-            // Split cost: each gets half
-            spenderTotals.Gautami += Number(e.amount || 0) / 2;
-            spenderTotals.Ameya += Number(e.amount || 0) / 2;
+        const amount = Number(e.amount || 0);
+        if (e.split_cost && members.length > 0) {
+            const splitAmount = amount / members.length;
+            members.forEach(m => { spenderTotals[m.name] += splitAmount; });
         } else {
-            if (e.who === 'Gautami') spenderTotals.Gautami += Number(e.amount || 0);
-            if (e.who === 'Ameya') spenderTotals.Ameya += Number(e.amount || 0);
+            const who = (e.who || '').toString().trim();
+            if (spenderTotals.hasOwnProperty(who)) {
+                spenderTotals[who] += amount;
+            }
         }
     });
-    
-    const spenderLabels = ['👩 Gautami', '👨 Ameya'];
+
+    const spenderLabels = members.map(m => `${m.emoji || ''} ${m.name}`);
+    const spenderData = members.map(m => spenderTotals[m.name]);
+    const spenderColors = members.map(m => m.color || getComputedStyle(document.documentElement).getPropertyValue('--mint').trim());
+
     const ctxSpender = document.getElementById('spenderPieChart')?.getContext('2d');
     if (ctxSpender) {
         if (window.spenderChart) window.spenderChart.destroy();
@@ -323,11 +331,8 @@ function renderSpenderChart(expenses) {
             data: {
                 labels: spenderLabels,
                 datasets: [{
-                    data: [spenderTotals.Gautami, spenderTotals.Ameya],
-                    backgroundColor: [
-                        getComputedStyle(document.documentElement).getPropertyValue('--mint').trim(),
-                        getComputedStyle(document.documentElement).getPropertyValue('--rosy-brown').trim()
-                    ]
+                    data: spenderData,
+                    backgroundColor: spenderColors
                 }]
             },
             options: getPieChartOptions(),

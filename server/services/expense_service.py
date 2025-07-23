@@ -162,10 +162,10 @@ def insert_expenses(df, statement_id=None):
             if not need_category or pd.isna(need_category):
                 need_category = guess_need_category(row.get('description'), category)
             
-            # Default spender to 'Gautami' if not specified
+            # Default spender: leave blank if not specified (or set to first household member if available)
             who = row.get('who')
             if not who or pd.isna(who):
-                who = 'Gautami'
+                who = ''
             
             split_cost = int(bool(row.get('split_cost', False)))
             outlier = int(bool(row.get('outlier', False)))

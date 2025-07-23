@@ -6,7 +6,20 @@ import numpy as np
 import string
 from flask import jsonify
 
-DB_PATH = 'expense_tracker.db'
+import os
+import subprocess
+def get_db_path():
+    branch = os.environ.get('EXPENSE_TRACKER_BRANCH')
+    if not branch:
+        try:
+            branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=os.path.dirname(__file__)+'/../..').decode().strip()
+        except Exception:
+            branch = 'main'
+    if branch == 'custom-user':
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '../expense_tracker_custom_user.db'))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '../expense_tracker.db'))
+
+DB_PATH = get_db_path()
 DEFAULT_CATEGORY_LABELS = [
     "food", "groceries", "entertainment", "travel", "utilities", "shopping", "gifts", "medicines", "charity", "school"
 ]

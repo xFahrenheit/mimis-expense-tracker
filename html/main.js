@@ -51,6 +51,150 @@ function updateSpendingBlocks(expenses) {
 
 // DOMContentLoaded handler
 window.addEventListener('DOMContentLoaded', async () => {
+    // --- Household Members Persistence ---
+    function saveHouseholdMembers() {
+        try {
+            localStorage.setItem('householdMembers', JSON.stringify(window.householdMembers || []));
+        } catch (e) {}
+    }
+
+    function loadHouseholdMembers() {
+        try {
+            const data = localStorage.getItem('householdMembers');
+            if (data) {
+                window.householdMembers = JSON.parse(data);
+            }
+        } catch (e) {}
+    }
+
+    // Load household members from localStorage on page load
+    loadHouseholdMembers();
+    // Declare modal/button variables at the top so they're available everywhere
+    const manageBtn = document.getElementById('manageHouseholdBtn');
+    const modal = document.getElementById('householdModal');
+    const closeModal = document.getElementById('closeHouseholdModal');
+
+    function setHouseholdPreset(preset) {
+        let members = [];
+        if (preset === 'couple') {
+            members = [
+                { name: 'Partner 1', emoji: '🧑‍🤝‍🧑', color: '#6cbda0', id: 'partner1' },
+                { name: 'Partner 2', emoji: '🧑‍🤝‍🧑', color: '#f4acb7', id: 'partner2' }
+            ];
+        } else if (preset === 'roommates') {
+            members = [
+                { name: 'Roommate 1', emoji: '🏠', color: '#6cbda0', id: 'roommate1' },
+                { name: 'Roommate 2', emoji: '🏠', color: '#9d8189', id: 'roommate2' }
+            ];
+        } else if (preset === 'family') {
+            members = [
+                { name: 'Mom', emoji: '👩', color: '#f4acb7', id: 'mom' },
+                { name: 'Dad', emoji: '👨', color: '#6cbda0', id: 'dad' },
+                { name: 'Kids', emoji: '👶', color: '#d99da2', id: 'kids' }
+            ];
+        } else if (preset === 'friends') {
+            members = [
+                { name: 'Friend 1', emoji: '👥', color: '#6cbda0', id: 'friend1' },
+                { name: 'Friend 2', emoji: '👥', color: '#f4acb7', id: 'friend2' }
+            ];
+        }
+        window.householdMembers = members;
+        saveHouseholdMembers();
+        renderHouseholdMemberList();
+        if (window.updateAllSpendingDisplays) window.updateAllSpendingDisplays(window.allExpenses || []);
+    }
+
+    function renderHouseholdMemberList() {
+        const listDiv = document.getElementById('householdMemberList');
+        const members = window.householdMembers || [];
+        if (!listDiv) return;
+        listDiv.innerHTML = '';
+        members.forEach((m, idx) => {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2 justify-center mb-1';
+            row.innerHTML = `
+                <input type="text" value="${m.name}" class="rounded px-1 py-0.5 border w-24 text-center" data-edit-name="${idx}" style="font-weight:600;" />
+                <input type="text" value="${m.emoji}" maxlength="2" class="rounded px-1 py-0.5 border w-10 text-center" data-edit-emoji="${idx}" style="font-size:1.2em;" />
+                <input type="color" value="${m.color}" class="rounded border w-7 h-7 p-0" data-edit-color="${idx}" />
+                <button class="btn-pastel-red btn-xs" data-remove="${idx}">Remove</button>
+            `;
+            row.querySelector('[data-remove]').onclick = () => {
+                window.householdMembers.splice(idx, 1);
+                syncHouseholdMembers();
+                saveHouseholdMembers();
+                renderHouseholdMemberList();
+                if (window.updateAllSpendingDisplays) window.updateAllSpendingDisplays(window.allExpenses || []);
+            };
+            // Edit name
+            row.querySelector(`[data-edit-name="${idx}"]`).onchange = (e) => {
+                window.householdMembers[idx].name = e.target.value;
+                syncHouseholdMembers();
+                saveHouseholdMembers();
+                if (window.updateAllSpendingDisplays) window.updateAllSpendingDisplays(window.allExpenses || []);
+            };
+            // Edit emoji
+            row.querySelector(`[data-edit-emoji="${idx}"]`).onchange = (e) => {
+                window.householdMembers[idx].emoji = e.target.value;
+                syncHouseholdMembers();
+                saveHouseholdMembers();
+                if (window.updateAllSpendingDisplays) window.updateAllSpendingDisplays(window.allExpenses || []);
+            };
+            // Edit color
+            row.querySelector(`[data-edit-color="${idx}"]`).onchange = (e) => {
+                window.householdMembers[idx].color = e.target.value;
+                syncHouseholdMembers();
+                saveHouseholdMembers();
+                if (window.updateAllSpendingDisplays) window.updateAllSpendingDisplays(window.allExpenses || []);
+            };
+            listDiv.appendChild(row);
+        });
+    }
+
+    // Ensure render.js module variable stays in sync with window.householdMembers
+    function syncHouseholdMembers() {
+        if (window.householdMembers) {
+            try {
+                // If render.js loaded as a module, update its variable too
+                if (window.householdMembers !== window.__renderHouseholdMembers) {
+                    window.__renderHouseholdMembers = window.householdMembers;
+                }
+            } catch (e) {}
+        }
+    }
+
+    // Add member form logic
+    const addMemberForm = document.getElementById('addMemberForm');
+    if (addMemberForm) {
+        addMemberForm.onsubmit = (e) => {
+            e.preventDefault();
+            const name = document.getElementById('newMemberName').value.trim();
+            const emoji = document.getElementById('newMemberEmoji').value.trim() || '👤';
+            const color = document.getElementById('newMemberColor').value || '#6cbda0';
+            if (!name) return;
+            window.householdMembers = window.householdMembers || [];
+            window.householdMembers.push({ name, emoji, color, id: name.toLowerCase().replace(/\s+/g, '') });
+            saveHouseholdMembers();
+            renderHouseholdMemberList();
+            if (window.updateAllSpendingDisplays) window.updateAllSpendingDisplays(window.allExpenses || []);
+            addMemberForm.reset();
+        };
+    }
+
+    // Preset buttons
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+        btn.onclick = () => setHouseholdPreset(btn.getAttribute('data-preset'));
+    });
+
+    // Setup Manage Household modal open/close
+    if (manageBtn && modal) {
+        manageBtn.onclick = () => {
+            modal.classList.remove('hidden');
+            renderHouseholdMemberList();
+        };
+    }
+    if (closeModal && modal) {
+        closeModal.onclick = () => { modal.classList.add('hidden'); };
+    }
     // Setup UI components
     setupTabSwitching();
     setupUploadForm();
