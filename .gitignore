@@ -63,3 +63,4 @@ db_backups/
 # Environment variables
 .env.local
 .env.production
+bashrc
