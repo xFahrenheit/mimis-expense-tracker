@@ -24,6 +24,24 @@
                 💾 Backup & Push
             </button>
         </div>
+        <!-- Global Loading Banner -->
+        <div id="globalLoadingBanner" class="fixed top-0 left-0 w-full z-50 hidden">
+            <div class="flex items-center justify-center bg-green-500 text-white font-semibold py-2 shadow-lg animate-pulse" style="background: #10b981;">
+                <svg class="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                Processing statement, please wait...
+            </div>
+        </div>
+        <!-- Modal for duplicate statement notification -->
+        <div id="duplicateModal" class="fixed inset-0 z-50 hidden">
+            <div class="fixed inset-0 bg-black opacity-30 z-40"></div>
+            <div class="flex items-center justify-center min-h-screen w-full fixed inset-0 z-50">
+                <div class="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full border-2 border-mint text-center z-50">
+                    <div class="text-lg font-semibold text-red-600 mb-2">Duplicate Statement</div>
+                    <div id="duplicateModalMsg" class="mb-4 text-gray-700"></div>
+                    <button id="closeDuplicateModal" class="btn-pastel-red w-full">OK</button>
+                </div>
+            </div>
+        </div>
         <!-- Tabbed UI -->
         <div class="glass-block p-2 mb-8">
             <div class="flex" style="border-bottom: 3px solid var(--mint); margin-bottom: 1rem;">

@@ -33,9 +33,11 @@ def reimport_statement(statement_id, upload_folder):
         expense_service.insert_expenses(df, statement_id)
         os.remove(temp_path)
     return jsonify({'success': True, 'count': len(df)})
+
 def save_pdf_statement(filename, filepath):
     """Save PDF file to DB and return new statement_id."""
     from datetime import datetime
+    print(f"[DEBUG] save_pdf_statement called with filename: {filename} and filepath: {filepath}")
     with open(filepath, 'rb') as f:
         pdf_bytes = f.read()
     with get_db_connection() as conn:
@@ -43,11 +45,14 @@ def save_pdf_statement(filename, filepath):
             'INSERT INTO statements (filename, upload_date, file) VALUES (?, ?, ?)',
             (filename, datetime.now().isoformat(), pdf_bytes)
         )
+        conn.commit()
+        print(f"[DEBUG] Inserted PDF statement: {filename} (rowid: {cur.lastrowid})")
         return cur.lastrowid
 
 def save_csv_statement(filename, filepath):
     """Save CSV file to DB and return new statement_id."""
     from datetime import datetime
+    print(f"[DEBUG] save_csv_statement called with filename: {filename} and filepath: {filepath}")
     with open(filepath, 'rb') as f:
         csv_bytes = f.read()
     with get_db_connection() as conn:
@@ -55,7 +60,11 @@ def save_csv_statement(filename, filepath):
             'INSERT INTO statements (filename, upload_date, file) VALUES (?, ?, ?)',
             (filename, datetime.now().isoformat(), csv_bytes)
         )
+        conn.commit()
+        print(f"[DEBUG] Inserted CSV statement: {filename} (rowid: {cur.lastrowid})")
         return cur.lastrowid
+    
+    
 def is_duplicate_statement(filename):
     with get_db_connection() as conn:
         cur = conn.execute('SELECT 1 FROM statements WHERE filename = ?', (filename,))

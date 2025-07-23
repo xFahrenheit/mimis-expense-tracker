@@ -10,6 +10,18 @@ BACKUP_DIR="db_backups"
 # Create backup directory if it doesn't exist
 mkdir -p "$BACKUP_DIR"
 
+# Function to delete old backups, keeping only the 7 most recent
+delete_old_backups() {
+    backups=( $(ls -1t "$BACKUP_DIR"/expense_tracker_backup_*.db 2>/dev/null) )
+    count=${#backups[@]}
+    if [ $count -gt 7 ]; then
+        for ((i=7; i<$count; i++)); do
+            rm -f "${backups[$i]}"
+            echo "🗑️ Deleted old backup: ${backups[$i]}"
+        done
+    fi
+}
+
 # Function to create a timestamped backup
 create_backup() {
     if [ -f "$DB_FILE" ]; then
@@ -17,6 +29,7 @@ create_backup() {
         backup_file="$BACKUP_DIR/expense_tracker_backup_$timestamp.db"
         cp "$DB_FILE" "$backup_file"
         echo "📁 Backup created: $backup_file"
+        delete_old_backups
     fi
 }
 
@@ -50,10 +63,10 @@ if [ "$1" = "sync" ]; then
         # Check if password is provided via environment variable
         if [ -n "$EXPENSE_DB_PASSWORD" ]; then
             # Use password from environment variable (non-interactive)
-            echo "$EXPENSE_DB_PASSWORD" | openssl enc -aes-256-cbc -d -in "$ENCRYPTED_FILE" -out "$DB_FILE" -pass stdin
+            echo "$EXPENSE_DB_PASSWORD" | openssl enc -aes-256-cbc -d -pbkdf2 -in "$ENCRYPTED_FILE" -out "$DB_FILE" -pass stdin
         else
             # Interactive password prompt (for manual use)
-            openssl enc -aes-256-cbc -d -in "$ENCRYPTED_FILE" -out "$DB_FILE"
+            openssl enc -aes-256-cbc -d -pbkdf2 -in "$ENCRYPTED_FILE" -out "$DB_FILE"
         fi
         
         if [ $? -eq 0 ]; then
@@ -99,10 +112,10 @@ elif [ "$1" = "upload" ]; then
     # Check if password is provided via environment variable
     if [ -n "$EXPENSE_DB_PASSWORD" ]; then
         # Use password from environment variable (non-interactive)
-        echo "$EXPENSE_DB_PASSWORD" | openssl enc -aes-256-cbc -salt -in "$DB_FILE" -out "$ENCRYPTED_FILE" -pass stdin
+        echo "$EXPENSE_DB_PASSWORD" | openssl enc -aes-256-cbc -salt -pbkdf2 -in "$DB_FILE" -out "$ENCRYPTED_FILE" -pass stdin
     else
         # Interactive password prompt (for manual use)
-        openssl enc -aes-256-cbc -salt -in "$DB_FILE" -out "$ENCRYPTED_FILE"
+        openssl enc -aes-256-cbc -salt -pbkdf2 -in "$DB_FILE" -out "$ENCRYPTED_FILE"
     fi
     
     if [ $? -eq 0 ]; then

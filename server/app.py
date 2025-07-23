@@ -3,7 +3,11 @@
 import os
 from flask import Flask, request, jsonify, send_from_directory, abort
 from werkzeug.utils import secure_filename
-from flask_cors import CORS
+
+try:
+    from flask_cors import CORS
+except ImportError:
+    CORS = None
 
 # Import service modules
 from services import database_service, expense_service, category_service, pdf_service, cleanup_service, statement_service
@@ -11,10 +15,22 @@ from services import database_service, expense_service, category_service, pdf_se
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'csv', 'pdf'}
 
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, methods=["GET", "POST", "DELETE", "PATCH", "OPTIONS"])
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Enable CORS for all routes if flask_cors is available
+if CORS:
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True, methods=["GET", "POST", "DELETE", "PATCH", "OPTIONS"])
+else:
+    print("[WARNING] flask_cors not installed. CORS will not be enabled.")
+# --- Endpoints ---
+
+# Favicon route to prevent 404 errors
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 
 # Initialize database on startup
 try:

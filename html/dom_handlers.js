@@ -69,7 +69,7 @@ export function setupUploadForm() {
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(uploadForm);
-        
+
         // Extract bank type from selected card option
         const cardSelect = document.getElementById('cardSelect');
         if (cardSelect && cardSelect.selectedOptions.length > 0) {
@@ -77,14 +77,34 @@ export function setupUploadForm() {
             const bankType = selectedOption.getAttribute('data-bank') || 'generic';
             formData.set('bank_type', bankType);
         }
-        
-        const res = await uploadFile(formData);
-        
-        if (res.ok) {
+
+
+        // Show loading banner and disable upload button
+        const loadingBanner = document.getElementById('globalLoadingBanner');
+        const uploadBtn = uploadForm.querySelector('button[type="submit"]');
+        if (loadingBanner) {
+            loadingBanner.classList.remove('hidden');
+            console.log('[DEBUG] Loading banner shown');
+        }
+        if (uploadBtn) uploadBtn.disabled = true;
+
+        let res;
+        try {
+            res = await uploadFile(formData);
+        } finally {
+            if (loadingBanner) {
+                loadingBanner.classList.add('hidden');
+                console.log('[DEBUG] Loading banner hidden');
+            }
+            if (uploadBtn) uploadBtn.disabled = false;
+        }
+
+        // Handle response
+        if (res && res.ok) {
             uploadForm.reset();
             if (window.loadStatements) await window.loadStatements();
             if (window.loadExpenses) await window.loadExpenses();
-            
+
             // Refresh time period tabs after successful upload
             setTimeout(async () => {
                 try {
@@ -96,7 +116,35 @@ export function setupUploadForm() {
                 }
             }, 1500);
         } else {
-            alert('Upload failed. Please try again.');
+            let msg = 'Upload failed. Please try again.';
+            let isDuplicate = false;
+            try {
+                // Always try to parse JSON error response
+                const data = await res.json();
+                if (res.status === 409 && data.duplicate) {
+                    msg = `This statement ("${data.filename}") has already been uploaded.`;
+                    isDuplicate = true;
+                } else if (data.error) {
+                    msg = data.error;
+                }
+            } catch {}
+            // Show modal for duplicate statement
+            if (isDuplicate || msg.startsWith('This statement')) {
+                const modal = document.getElementById('duplicateModal');
+                const msgDiv = document.getElementById('duplicateModalMsg');
+                const closeBtn = document.getElementById('closeDuplicateModal');
+                if (modal && msgDiv && closeBtn) {
+                    msgDiv.textContent = msg;
+                    modal.classList.remove('hidden');
+                    closeBtn.onclick = () => {
+                        modal.classList.add('hidden');
+                    };
+                } else {
+                    alert(msg); // fallback
+                }
+            } else {
+                alert(msg);
+            }
         }
     });
     

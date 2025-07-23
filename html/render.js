@@ -612,20 +612,20 @@ function setupInlineEditing(tbody, expenses) {
             if (field === 'who') {
                 const whoSelect = editingCell.querySelector('.edit-inline-who');
                 const whoCustom = editingCell.querySelector('.edit-inline-who-custom');
-                value = whoSelect.value;
-                if (value === '__custom__') {
+                value = whoSelect && whoSelect.value;
+                if (value === '__custom__' && whoCustom) {
                     value = whoCustom.value.trim();
                     // Add to dropdown for future use
-                    addOptionToSelect(whoSelect, value);
+                    if (whoSelect) addOptionToSelect(whoSelect, value);
                 }
             } else if (field === 'category') {
                 const catSelect = editingCell.querySelector('.edit-inline-category');
-                value = catSelect.value;
+                value = catSelect && catSelect.value;
             } else {
                 const input = editingCell.querySelector('input,select');
-                value = input.value;
+                value = input && input.value;
             }
-            if (exp) {
+            if (exp && value !== undefined) {
                 didSave = true;
                 // Don't immediately re-render the cell, just leave it in edit mode until the backend confirms
                 saveInlineEdit(editingCell, exp, field, value, true);
