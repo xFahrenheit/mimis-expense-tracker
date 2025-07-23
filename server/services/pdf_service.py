@@ -45,7 +45,7 @@ def parse_pdf(filepath, bank_type='generic'):
         'amex': parse_amex_statement,
         'citi': parse_citi_statement,
         'venturex': parse_venturex_statement,
-        'amazon_visa': parse_amazon_visa_statement,
+        'amazon': parse_amazon_visa_statement,
         'generic': parse_generic_statement
     }
     
@@ -56,6 +56,7 @@ def parse_pdf(filepath, bank_type='generic'):
         result = parser(filepath)
         if result is not None and len(result) > 0:
             print(f"Successfully parsed {len(result)} transactions using {parser.__name__}")
+            print(f"Transaction Totals: {result['amount'].sum():.2f}")
             return result
         else:
             print(f"{parser.__name__} failed, falling back to generic parser")
@@ -864,10 +865,11 @@ def parse_regex_fallback(filepath):
 
 def parse_amazon_visa_statement(filepath):
     """
-    Parse Amazon Visa statements
-    Format:
-    - Date Description Amount
-    - Multiple transactions per line
+    Parse Amazon credit card statements
+    Format examples:
+    04/27 AUTOMATIC PAYMENT - THANK YOU -384.80
+    04/02 DD *DOORDASH DAVESHOTC 855-431-0459 CA 28.20
+    04/10 PENN MED PRINCETON MED PLAINSBORO NJ 352.75
     """
     rows = []
     
@@ -878,31 +880,128 @@ def parse_amazon_visa_statement(filepath):
                 continue
                 
             lines = text.splitlines()
-            print(f"Amazon Visa parser processing {len(lines)} lines")
+            print(f"Amazon parser processing {len(lines)} lines")
             
             for line in lines:
                 line = line.strip()
                 if not line:
                     continue
                 
-                # Amazon Visa Pattern: MM/DD/YYYY Description Amount
-                pattern = r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$'
-                match = re.match(pattern, line)
+                # Skip header lines and non-transaction lines
+                skip_patterns = [
+                    'account activity', 'date of', 'transaction', 'merchant name', 'description',
+                    'amount', 'statement', 'account', 'balance', 'total', 'page', 'previous',
+                    'payment due', 'minimum payment'
+                ]
+                if any(skip_word in line.lower() for skip_word in skip_patterns):
+                    continue
+                
+                # Debug: Print lines that might be transactions
+                if re.search(r'\d{2}/\d{2}', line) and re.search(r'[-+]?[\d,]+\.?\d{2}$', line):
+                    print(f"Amazon debug - potential transaction line: '{line}'")
+                
+                # Pattern 1: MM/DD DESCRIPTION AMOUNT (Amazon format)
+                # Examples:
+                # 04/02 DD *DOORDASH DAVESHOTC 855-431-0459 CA 28.20
+                # 04/27 AUTOMATIC PAYMENT - THANK YOU -384.80
+                pattern1 = r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$'
+                match = re.match(pattern1, line)
                 
                 if match:
                     date_str, description, amount_str = match.groups()
+                    print(f"Amazon Pattern 1 matched: {date_str} | {description} | {amount_str}")
                     try:
-                        date = datetime.strptime(date_str, "%m/%d/%Y").strftime("%Y-%m-%d")
+                        # Convert MM/DD to current year
+                        month, day = date_str.split('/')
+                        current_year = datetime.now().year
+                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
+                        
+                        print(f"Amazon date conversion: {date_str} -> {date}")
+                        
+                        # Clean amount - handle negative amounts (payments)
                         amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        amount = abs(amount)
+                        
+                        # Skip payments (negative amounts)
+                        if amount < 0:
+                            print(f"Skipping payment: {description.strip()}")
+                            continue
+                        
+                        amount = abs(amount)  # Ensure positive
+                        
+                        # Clean description - remove extra spaces
+                        description_clean = re.sub(r'\s+', ' ', description.strip())
                         
                         rows.append({
                             'date': date,
-                            'description': description.strip(),
+                            'description': description_clean,
                             'amount': amount,
-                            'card': 'Amazon Visa'
+                            'card': 'Amazon'
+                        })
+                        continue
+                    except Exception as e:
+                        print(f"Error parsing Amazon pattern 1: {line}, Error: {e}")
+                
+                # Pattern 2: MM/DD DESCRIPTION $AMOUNT (with dollar sign)
+                pattern2 = r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?\$[\d,]+\.?\d{2})$'
+                match = re.match(pattern2, line)
+                
+                if match:
+                    date_str, description, amount_str = match.groups()
+                    print(f"Amazon Pattern 2 matched: {date_str} | {description} | {amount_str}")
+                    try:
+                        month, day = date_str.split('/')
+                        current_year = datetime.now().year
+                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
+                        
+                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
+                        
+                        # Skip payments
+                        if amount < 0:
+                            print(f"Skipping payment: {description.strip()}")
+                            continue
+                        
+                        amount = abs(amount)
+                        description_clean = re.sub(r'\s+', ' ', description.strip())
+                        
+                        rows.append({
+                            'date': date,
+                            'description': description_clean,
+                            'amount': amount,
+                            'card': 'Amazon'
                         })
                     except Exception as e:
-                        print(f"Error parsing Amazon Visa line: {line}, Error: {e}")
-                        continue        
+                        print(f"Error parsing Amazon pattern 2: {line}, Error: {e}")
                 
+                # Pattern 3: MM/DD/YYYY format (fallback)
+                pattern3 = r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$'
+                match = re.match(pattern3, line)
+                
+                if match:
+                    date_str, description, amount_str = match.groups()
+                    print(f"Amazon Pattern 3 matched: {date_str} | {description} | {amount_str}")
+                    try:
+                        month, day, year = date_str.split('/')
+                        if len(year) == 2:
+                            year = f"20{year}"
+                        date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                        
+                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
+                        
+                        if amount < 0:
+                            print(f"Skipping payment: {description.strip()}")
+                            continue
+                        
+                        amount = abs(amount)
+                        description_clean = re.sub(r'\s+', ' ', description.strip())
+                        
+                        rows.append({
+                            'date': date,
+                            'description': description_clean,
+                            'amount': amount,
+                            'card': 'Amazon'
+                        })
+                    except Exception as e:
+                        print(f"Error parsing Amazon pattern 3: {line}, Error: {e}")
+    
+    print(f"Amazon parser found {len(rows)} transactions")
+    return pd.DataFrame(rows) if rows else None

@@ -5,7 +5,7 @@ try:
 except ImportError:
     CATEGORY_EXAMPLES = {}
 
-DB_PATH = '/Users/gautami/expense_tracker/server/expense_tracker.db'
+DB_PATH = 'expense_tracker.db'
 
 @contextmanager
 def get_db_connection():
