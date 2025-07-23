@@ -38,7 +38,7 @@ cd server && python app.py
 ### Second User Setup
 ```bash
 # Clone the shared repository
-git clone <shared-repo-url>
+git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
 cd expense_tracker
 
 # Install dependencies
