@@ -2,352 +2,243 @@ import pdfplumber
 import re
 import pandas as pd
 from datetime import datetime
+from typing import Optional, List, Dict, Any
+import logging
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
-def parse_pdf(filepath, bank_type='generic'):
-    """
-    Parse PDF based on bank type
-    """
-    # Add debug output to see what we're working with
-    print(f"\n=== DEBUGGING PDF PARSING ===")
-    print(f"File: {filepath}")
-    print(f"Bank type: {bank_type}")
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+@dataclass
+class Transaction:
+    """Data class for representing a transaction"""
+    date: str
+    description: str
+    amount: float
+    card: str
+    who: Optional[str] = None
+    category: Optional[str] = None
+    notes: Optional[str] = None
     
-    # Show first few lines of extracted text for debugging
-    try:
-        with pdfplumber.open(filepath) as pdf:
-            if pdf.pages:
-                first_page_text = pdf.pages[0].extract_text()
-                if first_page_text:
-                    lines = first_page_text.splitlines()[:15]  # First 15 lines
-                    print(f"First 15 lines from PDF:")
-                    for i, line in enumerate(lines, 1):
-                        print(f"  {i}: '{line.strip()}'")
-                    
-                    # Detect if this might be a bank account vs credit card statement
-                    text_lower = first_page_text.lower()
-                    if any(keyword in text_lower for keyword in ['checking', 'savings', 'deposit', 'payroll', 'zelle', 'wire transfer', 'account summary']):
-                        print("\n⚠️  WARNING: This appears to be a BANK ACCOUNT statement, not a credit card statement!")
-                        print("   Bank account transactions include deposits, transfers, and large amounts.")
-                        print("   Make sure you're uploading a CREDIT CARD statement for expense tracking.")
-                        
-                else:
-                    print("No text extracted from first page")
-    except Exception as e:
-        print(f"Error extracting debug text: {e}")
+    def to_dict(self) -> Dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+class StatementDetector:
+    """Detects the type of statement and potential issues"""
     
-    print(f"=== END DEBUG INFO ===\n")
+    BANK_ACCOUNT_KEYWORDS = [
+        'checking', 'savings', 'deposit', 'payroll', 'zelle', 'wire transfer', 
+        'account summary', 'ending balance', 'beginning balance', 'direct deposit'
+    ]
     
-    bank_parsers = {
-        'chase': parse_chase_statement,
-        'bofa': parse_bank_of_america_statement,
-        'wells_fargo': parse_wells_fargo_statement,
-        'discover': parse_discover_statement,
-        'amex': parse_amex_statement,
-        'citi': parse_citi_statement,
-        'venturex': parse_venturex_statement,
-        'amazon': parse_amazon_visa_statement,
-        'generic': parse_generic_statement
-    }
+    CREDIT_CARD_KEYWORDS = [
+        'credit card', 'previous balance', 'new balance', 'minimum payment',
+        'payment due date', 'available credit', 'credit limit'
+    ]
     
-    parser = bank_parsers.get(bank_type, parse_generic_statement)
-    print(f"Using {parser.__name__} for bank type: {bank_type}")
-    
-    try:
-        result = parser(filepath)
-        if result is not None and len(result) > 0:
-            print(f"Successfully parsed {len(result)} transactions using {parser.__name__}")
-            print(f"Transaction Totals: {result['amount'].sum():.2f}")
-            return result
+    @classmethod
+    def detect_statement_type(cls, text: str) -> str:
+        """Detect if this is a bank account or credit card statement"""
+        text_lower = text.lower()
+        
+        bank_score = sum(1 for keyword in cls.BANK_ACCOUNT_KEYWORDS if keyword in text_lower)
+        credit_score = sum(1 for keyword in cls.CREDIT_CARD_KEYWORDS if keyword in text_lower)
+        
+        if bank_score > credit_score:
+            return 'bank_account'
+        elif credit_score > bank_score:
+            return 'credit_card'
         else:
-            print(f"{parser.__name__} failed, falling back to generic parser")
-            return parse_generic_statement(filepath)
-    except Exception as e:
-        print(f"Error parsing with {parser.__name__}: {e}")
-        print("Falling back to generic parser")
-        return parse_generic_statement(filepath)
-
-def parse_chase_statement(filepath):
-    """
-    Parse Chase credit card statements
-    Format examples:
-    04/27 AUTOMATIC PAYMENT - THANK YOU -384.80
-    04/02 DD *DOORDASH DAVESHOTC 855-431-0459 CA 28.20
-    04/10 PENN MED PRINCETON MED PLAINSBORO NJ 352.75
-    """
-    rows = []
+            return 'unknown'
     
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-                
-            lines = text.splitlines()
-            print(f"Chase parser processing {len(lines)} lines")
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                # Skip header lines and non-transaction lines
-                skip_patterns = [
-                    'account activity', 'date of', 'transaction', 'merchant name', 'description',
-                    'amount', 'statement', 'account', 'balance', 'total', 'page', 'previous',
-                    'payment due', 'minimum payment'
-                ]
-                if any(skip_word in line.lower() for skip_word in skip_patterns):
-                    continue
-                
-                # Debug: Print lines that might be transactions
-                if re.search(r'\d{2}/\d{2}', line) and re.search(r'[-+]?[\d,]+\.?\d{2}$', line):
-                    print(f"Chase debug - potential transaction line: '{line}'")
-                
-                # Pattern 1: MM/DD DESCRIPTION AMOUNT (Chase format)
-                # Examples:
-                # 04/02 DD *DOORDASH DAVESHOTC 855-431-0459 CA 28.20
-                # 04/27 AUTOMATIC PAYMENT - THANK YOU -384.80
-                pattern1 = r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$'
-                match = re.match(pattern1, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    print(f"Chase Pattern 1 matched: {date_str} | {description} | {amount_str}")
-                    try:
-                        # Convert MM/DD to current year
-                        month, day = date_str.split('/')
-                        current_year = datetime.now().year
-                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        print(f"Chase date conversion: {date_str} -> {date}")
-                        
-                        # Clean amount - handle negative amounts (payments)
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        
-                        # Skip payments (negative amounts)
-                        if amount < 0:
-                            print(f"Skipping payment: {description.strip()}")
-                            continue
-                        
-                        amount = abs(amount)  # Ensure positive
-                        
-                        # Clean description - remove extra spaces
-                        description_clean = re.sub(r'\s+', ' ', description.strip())
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description_clean,
-                            'amount': amount,
-                            'card': 'Chase'
-                        })
-                        continue
-                    except Exception as e:
-                        print(f"Error parsing Chase pattern 1: {line}, Error: {e}")
-                
-                # Pattern 2: MM/DD DESCRIPTION $AMOUNT (with dollar sign)
-                pattern2 = r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?\$[\d,]+\.?\d{2})$'
-                match = re.match(pattern2, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    print(f"Chase Pattern 2 matched: {date_str} | {description} | {amount_str}")
-                    try:
-                        month, day = date_str.split('/')
-                        current_year = datetime.now().year
-                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        
-                        # Skip payments
-                        if amount < 0:
-                            print(f"Skipping payment: {description.strip()}")
-                            continue
-                        
-                        amount = abs(amount)
-                        description_clean = re.sub(r'\s+', ' ', description.strip())
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description_clean,
-                            'amount': amount,
-                            'card': 'Chase'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing Chase pattern 2: {line}, Error: {e}")
-                
-                # Pattern 3: MM/DD/YYYY format (fallback)
-                pattern3 = r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$'
-                match = re.match(pattern3, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    print(f"Chase Pattern 3 matched: {date_str} | {description} | {amount_str}")
-                    try:
-                        month, day, year = date_str.split('/')
-                        if len(year) == 2:
-                            year = f"20{year}"
-                        date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        
-                        if amount < 0:
-                            print(f"Skipping payment: {description.strip()}")
-                            continue
-                        
-                        amount = abs(amount)
-                        description_clean = re.sub(r'\s+', ' ', description.strip())
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description_clean,
-                            'amount': amount,
-                            'card': 'Chase'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing Chase pattern 3: {line}, Error: {e}")
-    
-    print(f"Chase parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
-
-def parse_bank_of_america_statement(filepath):
-    """
-    Parse Bank of America statements
-    Common format: Date Description Amount
-    """
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-                
-            lines = text.splitlines()
-            print(f"Bank of America parser processing {len(lines)} lines")
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                # BofA Pattern: MM/DD/YY Description Amount
-                pattern = r'^(\d{1,2}/\d{1,2}/\d{2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$'
-                match = re.match(pattern, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    try:
-                        month, day, year = date_str.split('/')
-                        year = f"20{year}"
-                        date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        amount = abs(amount)
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description.strip(),
-                            'amount': amount,
-                            'card': 'Bank of America'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing BofA line: {line}, Error: {e}")
-    
-    print(f"Bank of America parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
-
-def parse_wells_fargo_statement(filepath):
-    """
-    Parse Wells Fargo statements
-    """
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-                
-            lines = text.splitlines()
-            print(f"Wells Fargo parser processing {len(lines)} lines")
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                # Wells Fargo Pattern: MM/DD Description Amount
-                pattern = r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$'
-                match = re.match(pattern, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    try:
-                        month, day = date_str.split('/')
-                        current_year = datetime.now().year
-                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        amount = abs(amount)
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description.strip(),
-                            'amount': amount,
-                            'card': 'Wells Fargo'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing Wells Fargo line: {line}, Error: {e}")
-    
-    print(f"Wells Fargo parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
-
-def parse_discover_statement(filepath):
-    """
-    Parse Discover statements
-    Format:
-    TRANS.
-    DATE PURCHASES MERCHANT CATEGORY AMOUNT
-    06/24 BIG BAZAAR PLAINSBORO NJ Supermarkets $59.35
-    APPLE PAY ENDING IN 5377
-    """
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        print(f"Discover PDF has {len(pdf.pages)} pages")
+    @classmethod
+    def detect_bank(cls, text: str) -> str:
+        """Detect the bank from statement text"""
+        text_lower = text.lower()
         
-        # Try text extraction from ALL pages
-        all_text = ""
-        for page_num, page in enumerate(pdf.pages):
-            print(f"--- Checking page {page_num + 1} ---")
-            text = page.extract_text()
-            if text:
-                all_text += text + "\n"
-                lines = text.splitlines()
-                print(f"Page {page_num + 1} has {len(lines)} lines")
-                # Show first few lines that contain dates or dollar signs
-                for i, line in enumerate(lines[:20]):
-                    if line.strip() and (re.search(r'\d{2}/\d{2}', line) or '$' in line):
-                        print(f"  Line {i}: '{line.strip()}'")
-            
-            # Also try table extraction
-            tables = page.extract_tables()
-            if tables:
-                print(f"Page {page_num + 1} has {len(tables)} tables")
-                for table_num, table in enumerate(tables):
-                    print(f"  Table {table_num + 1}: {len(table)} rows")
-                    # Look for transaction-like data in tables
-                    for row_num, row in enumerate(table[:10]):  # First 10 rows
-                        if row and any(cell and re.search(r'\d{2}/\d{2}', str(cell)) for cell in row):
-                            print(f"    Row {row_num}: {row}")
+        bank_patterns = {
+            'chase': ['chase', 'jpmorgan chase'],
+            'bofa': ['bank of america', 'bankofamerica'],
+            'wells_fargo': ['wells fargo', 'wellsfargo'],
+            'discover': ['discover', 'discover card'],
+            'amex': ['american express', 'amex'],
+            'citi': ['citi', 'citibank', 'citicorp'],
+            'venturex': ['venture x', 'capital one venture'],
+            'amazon': ['amazon', 'amazon prime rewards']
+        }
         
-        # Now process the combined text
-        if not all_text.strip():
-            print("No text extracted from any page")
+        for bank_type, patterns in bank_patterns.items():
+            if any(pattern in text_lower for pattern in patterns):
+                return bank_type
+        
+        return 'generic'
+
+class DateParser:
+    """Utility class for parsing various date formats"""
+    
+    DATE_FORMATS = [
+        "%m/%d/%Y", "%m/%d/%y", "%m/%d",
+        "%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y",
+        "%b %d, %Y", "%b %d %Y", "%B %d, %Y",
+        "%b %d", "%B %d"
+    ]
+    
+    @classmethod
+    def parse_flexible_date(cls, date_str: str) -> Optional[str]:
+        """Parse various date formats and return YYYY-MM-DD format"""
+        if not date_str:
             return None
             
-        lines = all_text.splitlines()
-        print(f"\nProcessing combined text: {len(lines)} total lines")
+        date_str = date_str.strip()
+        
+        for fmt in cls.DATE_FORMATS:
+            try:
+                parsed = datetime.strptime(date_str, fmt)
+                if parsed.year == 1900:  # No year provided, use current year
+                    parsed = parsed.replace(year=datetime.now().year)
+                return parsed.strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+        
+        logger.warning(f"Could not parse date: {date_str}")
+        return None
+
+class BaseParser(ABC):
+    """Abstract base class for statement parsers"""
+    
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+        self.transactions: List[Transaction] = []
+    
+    @abstractmethod
+    def parse(self) -> pd.DataFrame:
+        """Parse the statement and return a DataFrame"""
+        pass
+    
+    def _extract_text(self) -> str:
+        """Extract all text from PDF"""
+        try:
+            with pdfplumber.open(self.filepath) as pdf:
+                return "\n".join(page.extract_text() or '' for page in pdf.pages)
+        except Exception as e:
+            logger.error(f"Error extracting text from {self.filepath}: {e}")
+            return ""
+    
+    def _clean_amount(self, amount_str: str) -> float:
+        """Clean and parse amount string"""
+        if not amount_str:
+            return 0.0
+        
+        # Remove all non-digit characters except decimal point and minus sign
+        clean_amount = re.sub(r'[^\d.-]', '', amount_str.replace(',', ''))
+        
+        try:
+            return float(clean_amount)
+        except ValueError:
+            logger.warning(f"Could not parse amount: {amount_str}")
+            return 0.0
+    
+    def _clean_description(self, description: str) -> str:
+        """Clean transaction description"""
+        if not description:
+            return ""
+        
+        # Remove extra whitespace and clean up
+        description = re.sub(r'\s+', ' ', description.strip())
+        
+        # Remove common suffixes that aren't useful
+        description = re.sub(r'\s+(REDEEMEDTHISPERIOD|CASHBACK BONUS|BONUSBALANCE).*$', '', description, flags=re.IGNORECASE)
+        
+        return description
+    
+    def _is_payment_or_credit(self, description: str, amount: float) -> bool:
+        """Determine if transaction is a payment or credit"""
+        payment_keywords = ['payment', 'credit', 'redemption', 'thank you', 'autopay', 'online payment']
+        return amount < 0 or any(keyword in description.lower() for keyword in payment_keywords)
+    
+    def _should_skip_line(self, line: str) -> bool:
+        """Determine if line should be skipped"""
+        skip_patterns = [
+            r'account activity|statement|balance|payment due|minimum payment',
+            r'date of|transaction|merchant name|description|amount',
+            r'^\s*$|^-+$|^\*+$',  # Empty lines, separators
+            r'page \d+|total|subtotal|previous balance|new balance'
+        ]
+        
+        return any(re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns)
+
+class ChaseParser(BaseParser):
+    """Parser for Chase credit card statements"""
+    
+    def parse(self) -> pd.DataFrame:
+        text = self._extract_text()
+        if not text:
+            return pd.DataFrame()
+        
+        lines = text.splitlines()
+        logger.info(f"Chase parser processing {len(lines)} lines")
+        
+        patterns = [
+            r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$',
+            r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?\$[\d,]+\.?\d{2})$',
+            r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$'
+        ]
+        
+        for line in lines:
+            line = line.strip()
+            if not line or self._should_skip_line(line):
+                continue
+            
+            for pattern in patterns:
+                match = re.match(pattern, line)
+                if match:
+                    date_str, description, amount_str = match.groups()
+                    
+                    # Parse date
+                    if '/' in date_str and len(date_str.split('/')) == 2:
+                        month, day = date_str.split('/')
+                        date = f"{datetime.now().year}-{month.zfill(2)}-{day.zfill(2)}"
+                    else:
+                        date = DateParser.parse_flexible_date(date_str)
+                    
+                    if not date:
+                        continue
+                    
+                    amount = self._clean_amount(amount_str)
+                    description = self._clean_description(description)
+                    
+                    # Skip payments and credits
+                    if self._is_payment_or_credit(description, amount):
+                        logger.debug(f"Skipping payment/credit: {description}")
+                        continue
+                    
+                    amount = abs(amount)  # Ensure positive for expenses
+                    
+                    if amount > 0 and len(description) > 2:
+                        transaction = Transaction(
+                            date=date,
+                            description=description,
+                            amount=amount,
+                            card='Chase'
+                        )
+                        self.transactions.append(transaction)
+                    break
+        
+        logger.info(f"Chase parser found {len(self.transactions)} transactions")
+        return pd.DataFrame([t.to_dict() for t in self.transactions])
+
+class DiscoverParser(BaseParser):
+    """Parser for Discover credit card statements"""
+    
+    def parse(self) -> pd.DataFrame:
+        text = self._extract_text()
+        if not text:
+            return pd.DataFrame()
+        
+        lines = text.splitlines()
+        logger.info(f"Discover parser processing {len(lines)} lines")
         
         current_section = None
         
@@ -356,645 +247,386 @@ def parse_discover_statement(filepath):
             if not line:
                 continue
             
-            # Track which section we're in
+            # Track sections
             if 'PAYMENTS AND CREDITS' in line.upper():
                 current_section = 'PAYMENTS'
-                print(f">>> Entering PAYMENTS section at line {i}")
                 continue
             elif 'PURCHASES' in line.upper() and ('MERCHANT' in line.upper() or 'AMOUNT' in line.upper()):
                 current_section = 'PURCHASES'
-                print(f">>> Entering PURCHASES section at line {i}")
                 continue
             
             # Look for transaction patterns
-            if re.match(r'^\d{2}/\d{2}', line):
-                print(f"\nFound date line {i}: '{line}'")
-                print(f"Current section: {current_section}")
-
-                # Find all $AMOUNTs in the line
-                amounts = re.findall(r'\$(\d+\.?\d{2})', line)
+            date_pattern = r'^(\d{2}/\d{2})'
+            amount_pattern = r'\$(\d+\.?\d{2})'
+            
+            if re.match(date_pattern, line):
+                amounts = re.findall(amount_pattern, line)
                 if amounts:
-                    # Only use the first amount as the purchase
+                    # Use first amount as the transaction amount
                     amount_str = amounts[0]
-                    # Extract date and description up to the first $AMOUNT
                     pattern = r'^(\d{2}/\d{2})\s+(.+?)\s+\$' + re.escape(amount_str)
                     match = re.match(pattern, line)
+                    
                     if match:
                         date_str, description_full = match.groups()
-                        print(f">>> Pattern matched: Date='{date_str}' | Full='{description_full}' | Amount='${amount_str}'")
-
-                        # Clean the description - remove category and extra info
-                        description = description_full.strip()
-                        # Remove category words at the end
-                        description = re.sub(r'\s+(Supermarkets|Gas Stations|Restaurants|Department Stores|Entertainment|Travel|Online Services).*$', '', description)
-                        # Remove redemption/cashback text (but only at the end)
-                        description = re.sub(r'\s+(REDEEMEDTHISPERIOD|CASHBACK BONUS REDEMPTION|BONUSBALANCE|CASHBACK BONUS).*$', '', description, flags=re.IGNORECASE)
-                        description = re.sub(r'\s+', ' ', description).strip()
-
-                        print(f">>> Cleaned description: '{description}'")
-
-                        # Skip payments/credits section entirely
+                        
+                        # Skip if in payments section
                         if current_section == 'PAYMENTS':
-                            print(f">>> SKIPPING - In PAYMENTS section: {description}")
-                            return
-
-                        # Skip payment keywords in description
-                        skip_keywords = ['payment', 'credit', 'redemption', 'thank you']
-                        if any(keyword in description.lower() for keyword in skip_keywords):
-                            print(f">>> SKIPPING - Contains payment keyword: {description}")
-                            return
-
-                        # If the description is empty after cleaning, skip
-                        if not description or len(description) < 3:
-                            print(f">>> SKIPPING - Description too short after cleaning: '{description}'")
-                            return
-
-                        try:
-                            # Convert MM/DD to current year
-                            month, day = date_str.split('/')
-                            current_year = datetime.now().year
-                            date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
-
-                            amount = float(amount_str)
-
-                            rows.append({
-                                'date': date,
-                                'description': description,
-                                'amount': amount,
-                                'card': 'Discover'
-                            })
-                            print(f">>> ADDED TRANSACTION: {date} | '{description}' | ${amount}")
-
-                        except Exception as e:
-                            print(f">>> ERROR parsing transaction: {line}, Error: {e}")
-                    else:
-                        print(f">>> No regex match for date/description in line: '{line}'")
-    
-    print(f"\nDiscover parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
-
-def parse_amex_statement(filepath):
-    """
-    Parse American Express statements
-    """
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-                
-            lines = text.splitlines()
-            print(f"American Express parser processing {len(lines)} lines")
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                # Amex Pattern: MMM DD Description Amount
-                pattern = r'^([A-Z]{3} \d{1,2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$'
-                match = re.match(pattern, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    try:
-                        # Convert "JAN 15" to current year
-                        current_year = datetime.now().year
-                        date = datetime.strptime(f"{date_str} {current_year}", "%b %d %Y").strftime("%Y-%m-%d")
+                            continue
                         
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        amount = abs(amount)
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description.strip(),
-                            'amount': amount,
-                            'card': 'American Express'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing Amex line: {line}, Error: {e}")
-    
-    print(f"American Express parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
-
-def parse_citi_statement(filepath):
-    """
-    Parse Citi statements
-    """
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-                
-            lines = text.splitlines()
-            print(f"Citi parser processing {len(lines)} lines")
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                # Citi Pattern: MM/DD Description Amount
-                pattern = r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$'
-                match = re.match(pattern, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    try:
+                        # Parse date
                         month, day = date_str.split('/')
-                        current_year = datetime.now().year
-                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
+                        date = f"{datetime.now().year}-{month.zfill(2)}-{day.zfill(2)}"
                         
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        amount = abs(amount)
+                        # Clean description
+                        description = self._clean_description(description_full)
+                        description = re.sub(r'\s+(Supermarkets|Gas Stations|Restaurants|Department Stores|Entertainment|Travel|Online Services).*$', '', description)
                         
-                        rows.append({
-                            'date': date,
-                            'description': description.strip(),
-                            'amount': amount,
-                            'card': 'Citi'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing Citi line: {line}, Error: {e}")
-    
-    print(f"Citi parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
+                        # Skip if description contains payment keywords
+                        if self._is_payment_or_credit(description, float(amount_str)):
+                            continue
+                        
+                        if len(description) > 2:
+                            transaction = Transaction(
+                                date=date,
+                                description=description,
+                                amount=float(amount_str),
+                                card='Discover'
+                            )
+                            self.transactions.append(transaction)
+        
+        logger.info(f"Discover parser found {len(self.transactions)} transactions")
+        return pd.DataFrame([t.to_dict() for t in self.transactions])
 
-def parse_venturex_statement(filepath):
-    """
-    Parse Capital One Venture X statements
-    VentureX typically has transactions in a specific format:
-    - Multiple cardholders (AMEYA GODBOLE #1646, GAUTAMI LANGARKANDE #1153)
-    - Trans Date | Post Date | Description | Amount format
-    - Separate sections for each cardholder
-    """
-    rows = []
+class VentureXParser(BaseParser):
+    """Parser for Capital One Venture X statements"""
     
-    with pdfplumber.open(filepath) as pdf:
-        all_text = "\n".join(page.extract_text() or '' for page in pdf.pages)
-        lines = all_text.splitlines()
+    def parse(self) -> pd.DataFrame:
+        text = self._extract_text()
+        if not text:
+            return pd.DataFrame()
         
-        print(f"VentureX parser processing {len(lines)} lines")
-        print('--- VentureX sample (first 30 lines) ---')
-        for i, l in enumerate(lines[:30]):
-            print(f"{i:2d}: {repr(l)}")
-        print('--- End of VentureX Sample ---')
+        lines = text.splitlines()
+        logger.info(f"VentureX parser processing {len(lines)} lines")
         
-        # Track current cardholder and transaction state
         current_cardholder = None
-        in_transaction_section = False
-        current_section_type = None  # Track if we're in 'transactions' or 'payments'
-        
-        # Patterns for detecting cardholder sections
+        current_section_type = None
         cardholder_pattern = r'([A-Z][A-Z\s]+[A-Z])\s*#\d+:\s*(Transactions|Payments|Credits)'
         
-        # VentureX transaction patterns - handle both positive and negative amounts
         transaction_patterns = [
-            # VentureX multi-column format: Trans Date Post Date Description Amount (with optional negative sign)
             r'^([A-Z][a-z]{2} \d{1,2})\s+([A-Z][a-z]{2} \d{1,2})\s+(.+?)\s+([-]?\s*\$?[\d,]+\.?\d{2})$',
-            # Standard date formats as fallback
             r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+([-]?\s*\$?[\d,]+\.?\d{2})$',
             r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([-]?\s*\$?[\d,]+\.?\d{2})$',
         ]
         
-        for i, line in enumerate(lines):
+        for line in lines:
             line = line.strip()
             if not line:
                 continue
             
-            # Check for cardholder section headers
+            # Check for cardholder sections
             cardholder_match = re.search(cardholder_pattern, line, re.IGNORECASE)
             if cardholder_match:
                 cardholder_name = cardholder_match.group(1).strip()
                 section_type = cardholder_match.group(2).lower()
                 
-                # Extract just the first name (first word of the name)
-                first_name = cardholder_name.split()[0].title()
-                
-                if 'transaction' in section_type:
-                    current_cardholder = first_name
-                    current_section_type = 'transactions'
-                    in_transaction_section = True
-                    print(f"Found cardholder transaction section: {first_name}")
-                elif 'payment' in section_type or 'credit' in section_type:
-                    current_cardholder = first_name
-                    current_section_type = 'payments'
-                    in_transaction_section = True
-                    print(f"Found cardholder payments/credits section: {first_name}")
+                current_cardholder = cardholder_name.split()[0].title()  # First name only
+                current_section_type = 'transactions' if 'transaction' in section_type else 'payments'
+                logger.debug(f"Found {current_cardholder} {current_section_type} section")
                 continue
             
-            # Check for transaction table headers
-            if 'trans date' in line.lower() and 'post date' in line.lower():
-                in_transaction_section = True
-                print(f"Found transaction table header at line {i}")
+            # Skip non-transaction lines
+            if self._should_skip_line(line):
                 continue
             
-            # Skip if we're not in a transaction section
-            if not in_transaction_section:
-                continue
-            
-            # Skip obvious non-transaction lines
-            skip_patterns = [
-                r'account summary|payment information|balance|payment due',
-                r'late payment warning|minimum payment warning',
-                r'fees charged|interest charged|cash advances',
-                r'trans date|post date|description|amount',  # Header lines
-                r'^\s*$|^-+$|^\*+$',  # Empty/separator lines
-            ]
-            
-            if any(re.search(pattern, line, re.IGNORECASE) for pattern in skip_patterns):
-                continue
-            
-            # Try to match transaction patterns
-            transaction_found = False
+            # Try transaction patterns
             for pattern_idx, pattern in enumerate(transaction_patterns):
                 match = re.match(pattern, line)
                 if match:
-                    try:
-                        groups = match.groups()
-                        
-                        if pattern_idx == 0 and len(groups) == 4:
-                            # VentureX format: Trans Date, Post Date, Description, Amount
-                            trans_date, _, description, amount_str = groups
-                            date_str = trans_date  # Use transaction date
-                        elif len(groups) == 3:
-                            # Standard format: Date, Description, Amount
-                            date_str, description, amount_str = groups
-                        else:
-                            continue
-                        
-                        # Parse date
-                        date = parse_flexible_date(date_str)
-                        if not date:
-                            continue
-                        
-                        # Parse amount - handle negative values properly
-                        amount_str_clean = re.sub(r'[^\d.-]', '', amount_str.replace(',', '').replace(' ', ''))
-                        amount = float(amount_str_clean)
-                        
-                        # Determine if this is a credit or debit based on section and amount sign
-                        is_credit = False
-                        if current_section_type == 'payments' or amount < 0:
-                            # In payments section or negative amount, treat as credit/payment and skip from spending
-                            is_credit = True
-                            amount = abs(amount)
-                        else:
-                            # In transactions section, only positive amounts are spending
-                            amount = abs(amount)
-
-                        # Skip zero amounts or invalid descriptions
-                        if amount <= 0 or len(description.strip()) < 3:
-                            continue
-
-                        # Only add to spending if not a credit/payment
-                        transaction = {
-                            'date': date,
-                            'description': description.strip(),
-                            'amount': amount,
-                            'card': 'Venture X'
-                        }
-
-                        if current_cardholder:
-                            transaction['who'] = current_cardholder
-
-                        if is_credit:
-                            transaction['notes'] = 'Credit/Payment'
-                            transaction['amount'] = -amount  # Store as negative for credits
-                            # Do not count this in spending
-                        else:
-                            rows.append(transaction)
-
-                        credit_indicator = " (CREDIT)" if is_credit else ""
-                        print(f"Found transaction: {date} | {current_cardholder or 'Unknown'} | {description.strip()[:30]}... | ${amount}{credit_indicator}")
-                        transaction_found = True
-                        break
-                        
-                    except Exception as e:
-                        print(f"Error parsing transaction line: {line}, Error: {e}")
-                        continue
-            
-            # Handle multi-line transactions (like Turkish Airlines example)
-            if not transaction_found and current_cardholder and in_transaction_section:
-                # Check if this might be a continuation line
-                if i > 0 and len(line) > 10 and not re.match(r'^[A-Z][a-z]{2} \d{1,2}', line):
-                    # This might be a continuation of the previous transaction
-                    # For now, we'll skip these, but they could be handled by looking back
-                    pass
-    
-    print(f"VentureX parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
-
-def parse_generic_statement(filepath):
-    """
-    Generic parser for unknown formats - uses table extraction and regex fallback
-    """
-    # First try table extraction
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        print(f"PDF has {len(pdf.pages)} pages")
-        
-        for page_num, page in enumerate(pdf.pages):
-            print(f"Processing page {page_num + 1}")
-            tables = page.extract_tables()
-            print(f"Found {len(tables)} tables on page {page_num + 1}")
-            
-            for table in tables:
-                if not table or len(table) < 2:
-                    continue
+                    groups = match.groups()
                     
-                # Look for header row
-                header_row = None
-                for i, row in enumerate(table[:3]):
-                    if any(re.search(r'date|desc|amount|debit|credit', str(cell or '').lower()) for cell in row):
-                        header_row = i
-                        break
-                
-                if header_row is None:
-                    continue
-                
-                headers = [str(h or '').lower().strip() for h in table[header_row]]
-                print(f"Table headers: {headers}")
-                
-                # Find column indices
-                date_idx = next((i for i, h in enumerate(headers) if 'date' in h), None)
-                desc_idx = next((i for i, h in enumerate(headers) if any(word in h for word in ['desc', 'merchant', 'detail'])), None)
-                amount_idx = next((i for i, h in enumerate(headers) if any(word in h for word in ['amount', 'debit', 'credit'])), None)
-                
-                print(f"Column indices - Date: {date_idx}, Description: {desc_idx}, Amount: {amount_idx}")
-                
-                if all(idx is not None for idx in [date_idx, desc_idx, amount_idx]):
-                    for row in table[header_row+1:]:
-                        if len(row) > max(date_idx, desc_idx, amount_idx):
-                            try:
-                                date_val = str(row[date_idx] or '').strip()
-                                desc_val = str(row[desc_idx] or '').strip()
-                                amount_val = str(row[amount_idx] or '').strip()
-                                
-                                if date_val and desc_val and amount_val:
-                                    # Parse amount
-                                    amount = float(re.sub(r'[^\d.-]', '', amount_val))
-                                    amount = abs(amount)
-                                    
-                                    # Parse date (try multiple formats)
-                                    date = parse_flexible_date(date_val)
-                                    
-                                    if date:
-                                        rows.append({
-                                            'date': date,
-                                            'description': desc_val,
-                                            'amount': amount,
-                                            'card': 'Unknown'
-                                        })
-                            except Exception as e:
-                                print(f"Error parsing table row: {row}, Error: {e}")
-                                continue
-    
-    if rows:
-        print(f"Generic table parser found {len(rows)} transactions")
-        return pd.DataFrame(rows)
-    
-    # Fallback to regex parsing
-    print("Table parsing failed, trying regex fallback")
-    return parse_regex_fallback(filepath)
+                    if pattern_idx == 0 and len(groups) == 4:
+                        # VentureX format with trans/post dates
+                        trans_date, _, description, amount_str = groups
+                        date_str = trans_date
+                    elif len(groups) == 3:
+                        date_str, description, amount_str = groups
+                    else:
+                        continue
+                    
+                    date = DateParser.parse_flexible_date(date_str)
+                    if not date:
+                        continue
+                    
+                    amount = self._clean_amount(amount_str)
+                    description = self._clean_description(description)
+                    
+                    # Skip payments/credits or transactions in payment section
+                    is_credit = current_section_type == 'payments' or amount < 0
+                    if is_credit or self._is_payment_or_credit(description, amount):
+                        continue
+                    
+                    amount = abs(amount)
+                    
+                    if amount > 0 and len(description) > 2:
+                        transaction = Transaction(
+                            date=date,
+                            description=description,
+                            amount=amount,
+                            card='Venture X',
+                            who=current_cardholder
+                        )
+                        self.transactions.append(transaction)
+                    break
+        
+        logger.info(f"VentureX parser found {len(self.transactions)} transactions")
+        return pd.DataFrame([t.to_dict() for t in self.transactions])
 
-def parse_flexible_date(date_str):
-    """
-    Parse various date formats
-    """
-    date_formats = [
-        "%m/%d/%Y", "%m/%d/%y", "%m/%d",
-        "%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y",
-        "%b %d, %Y", "%b %d %Y", "%B %d, %Y",
-        "%b %d", "%B %d"
-    ]
+class GenericParser(BaseParser):
+    """Generic parser using table extraction and regex patterns"""
     
-    for fmt in date_formats:
+    def parse(self) -> pd.DataFrame:
+        # Try table extraction first
+        df = self._parse_tables()
+        if not df.empty:
+            return df
+        
+        # Fallback to regex parsing
+        return self._parse_regex()
+    
+    def _parse_tables(self) -> pd.DataFrame:
+        """Extract transactions from PDF tables"""
         try:
-            parsed = datetime.strptime(date_str, fmt)
-            if parsed.year == 1900:  # No year provided, use current year
-                parsed = parsed.replace(year=datetime.now().year)
-            return parsed.strftime("%Y-%m-%d")
-        except ValueError:
-            continue
-    
-    return None
-
-def parse_regex_fallback(filepath):
-    """
-    Last resort regex parsing
-    """
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        all_text = "\n".join(page.extract_text() or '' for page in pdf.pages)
-        lines = all_text.splitlines()
+            with pdfplumber.open(self.filepath) as pdf:
+                for page in pdf.pages:
+                    tables = page.extract_tables()
+                    
+                    for table in tables:
+                        if not table or len(table) < 2:
+                            continue
+                        
+                        # Find header row
+                        header_row_idx = None
+                        for i, row in enumerate(table[:3]):
+                            if any(re.search(r'date|desc|amount|debit|credit', str(cell or '').lower()) for cell in row):
+                                header_row_idx = i
+                                break
+                        
+                        if header_row_idx is None:
+                            continue
+                        
+                        headers = [str(h or '').lower().strip() for h in table[header_row_idx]]
+                        
+                        # Find column indices
+                        date_idx = next((i for i, h in enumerate(headers) if 'date' in h), None)
+                        desc_idx = next((i for i, h in enumerate(headers) if any(word in h for word in ['desc', 'merchant', 'detail'])), None)
+                        amount_idx = next((i for i, h in enumerate(headers) if any(word in h for word in ['amount', 'debit', 'credit'])), None)
+                        
+                        if all(idx is not None for idx in [date_idx, desc_idx, amount_idx]):
+                            for row in table[header_row_idx+1:]:
+                                if len(row) > max(date_idx, desc_idx, amount_idx):
+                                    try:
+                                        date_val = str(row[date_idx] or '').strip()
+                                        desc_val = str(row[desc_idx] or '').strip()
+                                        amount_val = str(row[amount_idx] or '').strip()
+                                        
+                                        if date_val and desc_val and amount_val:
+                                            date = DateParser.parse_flexible_date(date_val)
+                                            amount = self._clean_amount(amount_val)
+                                            description = self._clean_description(desc_val)
+                                            
+                                            if date and amount > 0 and len(description) > 2:
+                                                transaction = Transaction(
+                                                    date=date,
+                                                    description=description,
+                                                    amount=abs(amount),
+                                                    card='Unknown'
+                                                )
+                                                self.transactions.append(transaction)
+                                    except Exception as e:
+                                        logger.debug(f"Error parsing table row: {e}")
+                                        continue
+        except Exception as e:
+            logger.error(f"Error parsing tables: {e}")
         
-        print('--- Generic regex fallback (first 15 lines) ---')
-        for l in lines[:15]:
-            print(repr(l))
-        print('--- End of Sample ---')
+        return pd.DataFrame([t.to_dict() for t in self.transactions])
+    
+    def _parse_regex(self) -> pd.DataFrame:
+        """Parse using regex patterns as fallback"""
+        text = self._extract_text()
+        if not text:
+            return pd.DataFrame()
         
-        # Try various patterns - improved for VentureX and other formats
+        lines = text.splitlines()
+        
         patterns = [
-            # Standard patterns
             r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
             r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
             r'^([A-Z]{3} \d{1,2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
             r'^(\d{4}-\d{2}-\d{2})\s+(.+?)\s+([-+]?\$?[\d,]+\.?\d{2})$',
-            # Patterns with more flexible spacing
-            r'^(\d{1,2}/\d{1,2}/\d{2,4})\s{2,}(.+?)\s{2,}([-+]?\$?[\d,]+\.?\d{2})$',
-            r'^(\d{1,2}/\d{1,2})\s{2,}(.+?)\s{2,}([-+]?\$?[\d,]+\.?\d{2})$',
-            # Capital One/VentureX specific patterns
-            r'^(\d{1,2}/\d{1,2}/\d{4})\s+(.+?)\s+\$?([\d,]+\.?\d{2})\s*$',
-            r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+\$?([\d,]+\.?\d{2})\s*$',
-            # Patterns for amounts without $ sign
-            r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([\d,]+\.?\d{2})\s*$',
-            r'^(\d{1,2}/\d{1,2})\s+(.+?)\s+([\d,]+\.?\d{2})\s*$'
-        ]
-        
-        # Skip lines that are clearly headers or summary info
-        skip_patterns = [
-            r'account summary|payment information|previous balance|new balance|minimum payment',
-            r'payment due|deadline|total|balance|summary|statement',
-            r'^\s*$|^-+$|^\*+$',  # Empty lines, dashes, asterisks
-            r'^\d+\s*$'  # Lines with just numbers
         ]
         
         for pattern in patterns:
             for line in lines:
-                line_stripped = line.strip()
-                
-                # Skip lines that match skip patterns
-                if any(re.search(skip_pattern, line_stripped, re.IGNORECASE) for skip_pattern in skip_patterns):
-                    continue
-                
-                match = re.match(pattern, line_stripped)
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    try:
-                        date = parse_flexible_date(date_str)
-                        if date:
-                            amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                            amount = abs(amount)
-                            
-                            # Additional validation - skip if description is too short or looks like header
-                            if len(description.strip()) > 3 and not re.match(r'^(date|desc|amount|transaction)', description.lower()):
-                                rows.append({
-                                    'date': date,
-                                    'description': description.strip(),
-                                    'amount': amount,
-                                    'card': 'Unknown'
-                                })
-                    except Exception as e:
-                        print(f"Error parsing regex line: {line_stripped}, Error: {e}")
-                        continue
-            
-            if rows:
-                print(f"Found {len(rows)} transactions with pattern: {pattern}")
-                break  # Stop at first successful pattern
-    
-    print(f"Regex fallback found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
-
-
-def parse_amazon_visa_statement(filepath):
-    """
-    Parse Amazon credit card statements
-    Format examples:
-    04/27 AUTOMATIC PAYMENT - THANK YOU -384.80
-    04/02 DD *DOORDASH DAVESHOTC 855-431-0459 CA 28.20
-    04/10 PENN MED PRINCETON MED PLAINSBORO NJ 352.75
-    """
-    rows = []
-    
-    with pdfplumber.open(filepath) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-                
-            lines = text.splitlines()
-            print(f"Amazon parser processing {len(lines)} lines")
-            
-            for line in lines:
                 line = line.strip()
-                if not line:
+                
+                if self._should_skip_line(line):
                     continue
                 
-                # Skip header lines and non-transaction lines
-                skip_patterns = [
-                    'account activity', 'date of', 'transaction', 'merchant name', 'description',
-                    'amount', 'statement', 'account', 'balance', 'total', 'page', 'previous',
-                    'payment due', 'minimum payment'
-                ]
-                if any(skip_word in line.lower() for skip_word in skip_patterns):
-                    continue
-                
-                # Debug: Print lines that might be transactions
-                if re.search(r'\d{2}/\d{2}', line) and re.search(r'[-+]?[\d,]+\.?\d{2}$', line):
-                    print(f"Amazon debug - potential transaction line: '{line}'")
-                
-                # Pattern 1: MM/DD DESCRIPTION AMOUNT (Amazon format)
-                # Examples:
-                # 04/02 DD *DOORDASH DAVESHOTC 855-431-0459 CA 28.20
-                # 04/27 AUTOMATIC PAYMENT - THANK YOU -384.80
-                pattern1 = r'^(\d{2}/\d{2})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$'
-                match = re.match(pattern1, line)
-                
+                match = re.match(pattern, line)
                 if match:
                     date_str, description, amount_str = match.groups()
-                    match = re.match(pattern1, line)
-                    if match:
-                        date_str, description, amount_str = match.groups()
-                        print(f"Amazon Pattern 1 matched: {date_str} | {description} | {amount_str}")
-                        try:
-                            # Convert MM/DD to current year
-                            month, day = date_str.split('/')
-                            current_year = datetime.now().year
-                            date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
-                            print(f"Amazon date conversion: {date_str} -> {date}")
-                            # Clean amount - handle negative amounts (payments)
-                            amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                            # Skip payments (negative amounts)
-                            if amount < 0:
-                                print(f"Skipping payment: {description.strip()}")
-                                continue
-                            amount = abs(amount)  # Ensure positive
-                            # Clean description - remove extra spaces
-                            description_clean = re.sub(r'\s+', ' ', description.strip())
-                            rows.append({
-                                'date': date,
-                                'description': description_clean,
-                                'amount': amount,
-                                'card': 'Amazon'
-                            })
-                            continue
-                        except Exception as e:
-                            print(f"Error parsing Amazon pattern 1: {line}, Error: {e}")
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    print(f"Amazon Pattern 2 matched: {date_str} | {description} | {amount_str}")
-                    try:
-                        month, day = date_str.split('/')
-                        current_year = datetime.now().year
-                        date = f"{current_year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        
-                        # Skip payments
-                        if amount < 0:
-                            print(f"Skipping payment: {description.strip()}")
-                            continue
-                        
-                        amount = abs(amount)
-                        description_clean = re.sub(r'\s+', ' ', description.strip())
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description_clean,
-                            'amount': amount,
-                            'card': 'Amazon'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing Amazon pattern 2: {line}, Error: {e}")
-                
-                # Pattern 3: MM/DD/YYYY format (fallback)
-                pattern3 = r'^(\d{1,2}/\d{1,2}/\d{2,4})\s+(.+?)\s+([-+]?[\d,]+\.?\d{2})$'
-                match = re.match(pattern3, line)
-                
-                if match:
-                    date_str, description, amount_str = match.groups()
-                    print(f"Amazon Pattern 3 matched: {date_str} | {description} | {amount_str}")
-                    try:
-                        month, day, year = date_str.split('/')
-                        if len(year) == 2:
-                            year = f"20{year}"
-                        date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                        
-                        amount = float(re.sub(r'[^\d.-]', '', amount_str))
-                        
-                        if amount < 0:
-                            print(f"Skipping payment: {description.strip()}")
-                            continue
-                        
-                        amount = abs(amount)
-                        description_clean = re.sub(r'\s+', ' ', description.strip())
-                        
-                        rows.append({
-                            'date': date,
-                            'description': description_clean,
-                            'amount': amount,
-                            'card': 'Amazon'
-                        })
-                    except Exception as e:
-                        print(f"Error parsing Amazon pattern 3: {line}, Error: {e}")
+                    
+                    date = DateParser.parse_flexible_date(date_str)
+                    if not date:
+                        continue
+                    
+                    amount = self._clean_amount(amount_str)
+                    description = self._clean_description(description)
+                    
+                    # Skip payments/credits
+                    if self._is_payment_or_credit(description, amount):
+                        continue
+                    
+                    amount = abs(amount)
+                    
+                    if amount > 0 and len(description) > 2:
+                        transaction = Transaction(
+                            date=date,
+                            description=description,
+                            amount=amount,
+                            card='Unknown'
+                        )
+                        self.transactions.append(transaction)
+            
+            if self.transactions:
+                break  # Stop at first successful pattern
+        
+        logger.info(f"Generic parser found {len(self.transactions)} transactions")
+        return pd.DataFrame([t.to_dict() for t in self.transactions])
+
+class StatementParser:
+    """Main parser class that orchestrates the parsing process"""
     
-    print(f"Amazon parser found {len(rows)} transactions")
-    return pd.DataFrame(rows) if rows else None
+    PARSER_MAP = {
+        'chase': ChaseParser,
+        'discover': DiscoverParser,
+        'venturex': VentureXParser,
+        'bofa': GenericParser,  # Use generic for now
+        'wells_fargo': GenericParser,
+        'amex': GenericParser,
+        'citi': GenericParser,
+        'amazon': GenericParser,
+        'generic': GenericParser
+    }
+    
+    def __init__(self, filepath: str, bank_type: Optional[str] = None):
+        self.filepath = filepath
+        self.bank_type = bank_type
+    
+    def parse(self) -> pd.DataFrame:
+        """Parse the PDF statement and return a DataFrame of transactions"""
+        logger.info(f"=== PARSING PDF: {self.filepath} ===")
+        
+        # Auto-detect bank type if not provided
+        if not self.bank_type:
+            self.bank_type = self._auto_detect_bank()
+        
+        logger.info(f"Using bank type: {self.bank_type}")
+        
+        # Check for potential issues
+        self._validate_statement()
+        
+        # Get the appropriate parser
+        parser_class = self.PARSER_MAP.get(self.bank_type, GenericParser)
+        parser = parser_class(self.filepath)
+        
+        try:
+            df = parser.parse()
+            
+            if df.empty:
+                logger.warning(f"No transactions found with {parser_class.__name__}, trying generic parser")
+                generic_parser = GenericParser(self.filepath)
+                df = generic_parser.parse()
+            
+            logger.info(f"Successfully parsed {len(df)} transactions")
+            if not df.empty:
+                logger.info(f"Total amount: ${df['amount'].sum():.2f}")
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"Error parsing with {parser_class.__name__}: {e}")
+            logger.info("Falling back to generic parser")
+            generic_parser = GenericParser(self.filepath)
+            return generic_parser.parse()
+    
+    def _auto_detect_bank(self) -> str:
+        """Auto-detect the bank from the PDF content"""
+        try:
+            with pdfplumber.open(self.filepath) as pdf:
+                if pdf.pages:
+                    first_page_text = pdf.pages[0].extract_text() or ""
+                    return StatementDetector.detect_bank(first_page_text)
+        except Exception as e:
+            logger.error(f"Error detecting bank type: {e}")
+        
+        return 'generic'
+    
+    def _validate_statement(self):
+        """Validate the statement and warn about potential issues"""
+        try:
+            with pdfplumber.open(self.filepath) as pdf:
+                if pdf.pages:
+                    first_page_text = pdf.pages[0].extract_text() or ""
+                    
+                    # Show debug info
+                    lines = first_page_text.splitlines()[:10]
+                    logger.debug("First 10 lines from PDF:")
+                    for i, line in enumerate(lines, 1):
+                        logger.debug(f"  {i}: '{line.strip()}'")
+                    
+                    # Check statement type
+                    statement_type = StatementDetector.detect_statement_type(first_page_text)
+                    if statement_type == 'bank_account':
+                        logger.warning("⚠️  WARNING: This appears to be a BANK ACCOUNT statement, not a credit card statement!")
+                        logger.warning("   Bank account transactions include deposits, transfers, and large amounts.")
+                        logger.warning("   Make sure you're uploading a CREDIT CARD statement for expense tracking.")
+                    
+        except Exception as e:
+            logger.error(f"Error validating statement: {e}")
+
+# Main function for backward compatibility
+def parse_pdf(filepath: str, bank_type: str = 'generic') -> pd.DataFrame:
+    """
+    Parse PDF based on bank type - main entry point for backward compatibility
+    
+    Args:
+        filepath: Path to the PDF file
+        bank_type: Type of bank ('chase', 'discover', 'venturex', etc.)
+    
+    Returns:
+        DataFrame with parsed transactions
+    """
+    parser = StatementParser(filepath, bank_type)
+    return parser.parse()
+
+# Example usage
+if __name__ == "__main__":
+    # Example of how to use the enhanced parser
+    filepath = "statement.pdf"
+    
+    # Auto-detect bank type
+    parser = StatementParser(filepath)
+    df = parser.parse()
+    
+    # Or specify bank type
+    # parser = StatementParser(filepath, 'chase')
+    # df = parser.parse()
+    
+    if not df.empty:
+        print(f"Found {len(df)} transactions:")
+        print(df.head())
+        print(f"Total amount: ${df['amount'].sum():.2f}")
+    else:
+        print("No transactions found")

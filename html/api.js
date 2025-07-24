@@ -134,3 +134,15 @@ export async function backupAndPush() {
     });
     return res.json();
 }
+
+// Perform undo operation
+export async function performUndo() {
+    const res = await fetch(`${API_URL}/undo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) {
+        throw new Error(`Undo failed: ${res.statusText}`);
+    }
+    return res.json();
+}

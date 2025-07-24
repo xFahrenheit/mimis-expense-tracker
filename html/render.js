@@ -580,6 +580,8 @@ function setupRowListeners(tr, exp) {
             if (confirm('Delete this row?')) {
                 if (window.pushUndoState) window.pushUndoState();
                 await deleteExpense(exp.id);
+                if (window.pushUndoStateSelective) window.pushUndoStateSelective('delete');
+
                 // Reload data from server to ensure consistency
                 if (window.loadExpenses) {
                     await window.loadExpenses();
@@ -674,6 +676,8 @@ function setupInlineEditing(tbody, expenses) {
     // saveInlineEdit function
     async function saveInlineEdit(cell, exp, field, value, closeCellAfter = false) {
         if (window.pushUndoState) window.pushUndoState();
+        if (window.pushUndoStateSelective) window.pushUndoStateSelective('edit');
+
         const { API_URL } = await import('./config.js');
         
         try {
@@ -984,6 +988,8 @@ function setupAutofillButtons() {
         bulkDeleteBtn.onclick = async () => {
             await handleBulkDelete(bulkDeleteBtn);
         };
+        if (window.pushUndoStateSelective) window.pushUndoStateSelective('bulk_delete');
+
     }
     
     const floatingDeleteBtn = document.getElementById('floatingDeleteBtn');
