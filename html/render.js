@@ -598,6 +598,9 @@ function setupInlineEditing(tbody, expenses) {
     // Only one cell in edit mode at a time
     let editingCell = null;
     let originalContent = '';
+    
+    // Store per-cell state to avoid conflicts when rapidly clicking
+    let cellStates = new Map();
 
     function exitEditMode(save = false) {
         if (!editingCell) return;
@@ -606,6 +609,9 @@ function setupInlineEditing(tbody, expenses) {
             const id = editingCell.getAttribute('data-id');
             const field = editingCell.getAttribute('data-field');
             const exp = expenses.find(e => e.id == id);
+            const cellKey = `${id}_${field}`;
+            const cellState = cellStates.get(cellKey);
+            
             let value;
             if (field === 'who') {
                 const whoSelect = editingCell.querySelector('.edit-inline-who');
@@ -619,16 +625,32 @@ function setupInlineEditing(tbody, expenses) {
                 const catSelect = editingCell.querySelector('.edit-inline-category');
                 value = catSelect && catSelect.value;
             } else if (field === 'description') {
-                value = (lastTypedValue !== null && lastTypedValue !== undefined) ? lastTypedValue.trim() : '';
+                value = (cellState && cellState.lastTypedValue !== null && cellState.lastTypedValue !== undefined) ? cellState.lastTypedValue.trim() : '';
             } else {
                 const input = editingCell.querySelector('input,select');
                 value = input && input.value;
             }
             if (exp && value !== undefined) {
-                // For description, only save if not empty; otherwise restore original
-                if (field === 'description' && !value) {
+                // For all fields, only save if not empty (and valid for number/date); otherwise restore original
+                let shouldRestore = false;
+                if (field === 'amount') {
+                    // Amount field: must not be empty and must be a valid positive number
+                    const numValue = Number(value);
+                    if (value === '' || value === undefined || value === null || isNaN(numValue) || String(value).trim() === '' || numValue < 0) shouldRestore = true;
+                } else if (field === 'split_cost' || field === 'outlier') {
+                    // Other numeric fields (if any): must not be empty and must be a valid number
+                    if (value === '' || value === undefined || value === null || isNaN(value) || isNaN(Number(value)) || String(value).trim() === '') shouldRestore = true;
+                } else if (field === 'date') {
+                    // Date field
+                    if (!value || isNaN(Date.parse(value))) shouldRestore = true;
+                } else if (field === 'category' || field === 'who' || field === 'card' || field === 'notes' || field === 'description') {
+                    // Text fields
+                    if (!value) shouldRestore = true;
+                }
+                if (shouldRestore) {
                     editingCell.innerHTML = originalContent;
                     editingCell.classList.remove('editing-cell');
+                    cellStates.delete(cellKey);
                     editingCell = null;
                     originalContent = '';
                     return;
@@ -641,6 +663,9 @@ function setupInlineEditing(tbody, expenses) {
         if (!didSave) {
             editingCell.innerHTML = originalContent;
             editingCell.classList.remove('editing-cell');
+            const id = editingCell.getAttribute('data-id');
+            const field = editingCell.getAttribute('data-field');
+            cellStates.delete(`${id}_${field}`);
             editingCell = null;
             originalContent = '';
         }
@@ -651,56 +676,77 @@ function setupInlineEditing(tbody, expenses) {
         if (window.pushUndoState) window.pushUndoState();
         const { API_URL } = await import('./config.js');
         
-        // First, update the cell display immediately
-        if (cell) {
+        try {
+            // Validate value before saving
             if (field === 'amount') {
-                cell.textContent = `$${Number(value).toFixed(2)}`;
-            } else if (field === 'date') {
-                cell.textContent = formatDate(value);
-            } else if (field === 'who') {
-                cell.innerHTML = (value === 'Ameya' || value === 'Gautami') ? value : (value ? `<span class='custom-who'>${value}</span>` : '');
-            } else if (field === 'category') {
-                const { getCategoryMeta } = await import('./categories.js');
-                const meta = getCategoryMeta(value);
-                cell.innerHTML = `
-                    <span style="font-size:1.2em;vertical-align:middle;margin-right:4px;color:${meta.color};">${meta.icon}</span>
-                    ${(value || 'shopping').charAt(0).toUpperCase() + (value || 'shopping').slice(1)}
-                `;
-            } else if (field === 'need_category') {
-                let needBadgeClass = value === 'Luxury' ? 'luxury-badge' : 'need-badge';
-                cell.innerHTML = `<span class="${needBadgeClass}">${value}</span>`;
-            } else {
-                cell.textContent = value;
+                const numValue = Number(value);
+                if (isNaN(numValue) || numValue < 0) {
+                    throw new Error('Invalid amount value');
+                }
+                value = numValue; // Ensure it's stored as a number
             }
-        }
-        
-        // PATCH to backend
-        const id = exp.id;
-        const payload = { [field]: value };
-        await fetch(`${API_URL}/expense/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        // Update local data
-        exp[field] = value;
-        
-        // Update the data in window.allExpenses and window.filteredExpenses too
-        if (window.allExpenses) {
-            const allExp = window.allExpenses.find(e => e.id == id);
-            if (allExp) allExp[field] = value;
-        }
-        if (window.filteredExpenses) {
-            const filteredExp = window.filteredExpenses.find(e => e.id == id);
-            if (filteredExp) filteredExp[field] = value;
-        }
-        
-        // Do not reload data from server here; allow undo/redo to work on local state
-        
-        // Update spending totals and refresh displays
-        if (window.applyColumnFilters) {
-            window.applyColumnFilters();
+            
+            // First, update the cell display immediately
+            if (cell) {
+                if (field === 'amount') {
+                    cell.textContent = `$${Number(value).toFixed(2)}`;
+                } else if (field === 'date') {
+                    cell.textContent = formatDate(value);
+                } else if (field === 'who') {
+                    cell.innerHTML = (value === 'Ameya' || value === 'Gautami') ? value : (value ? `<span class='custom-who'>${value}</span>` : '');
+                } else if (field === 'category') {
+                    const { getCategoryMeta } = await import('./categories.js');
+                    const meta = getCategoryMeta(value);
+                    cell.innerHTML = `
+                        <span style="font-size:1.2em;vertical-align:middle;margin-right:4px;color:${meta.color};">${meta.icon}</span>
+                        ${(value || 'shopping').charAt(0).toUpperCase() + (value || 'shopping').slice(1)}
+                    `;
+                } else if (field === 'need_category') {
+                    let needBadgeClass = value === 'Luxury' ? 'luxury-badge' : 'need-badge';
+                    cell.innerHTML = `<span class="${needBadgeClass}">${value}</span>`;
+                } else {
+                    cell.textContent = value;
+                }
+            }
+            
+            // PATCH to backend
+            const id = exp.id;
+            const payload = { [field]: value };
+            const response = await fetch(`${API_URL}/expense/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+            
+            // Update local data
+            exp[field] = value;
+            
+            // Update the data in window.allExpenses and window.filteredExpenses too
+            if (window.allExpenses) {
+                const allExp = window.allExpenses.find(e => e.id == id);
+                if (allExp) allExp[field] = value;
+            }
+            if (window.filteredExpenses) {
+                const filteredExp = window.filteredExpenses.find(e => e.id == id);
+                if (filteredExp) filteredExp[field] = value;
+            }
+            
+            // Update spending totals and refresh displays
+            if (window.applyColumnFilters) {
+                window.applyColumnFilters();
+            }
+            
+        } catch (error) {
+            console.error('Failed to save inline edit:', error);
+            // Restore original content on error
+            if (cell && originalContent) {
+                cell.innerHTML = originalContent;
+            }
+            alert('Failed to save changes. Please try again.');
         }
         
         // If called from inline edit, close the cell after update
@@ -708,26 +754,40 @@ function setupInlineEditing(tbody, expenses) {
             if (cell) {
                 cell.classList.remove('editing-cell');
             }
+            const id = exp.id;
+            const field = cell.getAttribute('data-field');
+            cellStates.delete(`${id}_${field}`);
             editingCell = null;
             originalContent = '';
         }
     }
 
-    let lastEditValue = null;
-    let activeInput = null;
-    let lastTypedValue = null;
     tbody.querySelectorAll('.editable-cell').forEach(cell => {
         cell.addEventListener('click', async (e) => {
+            // Force exit any current editing before starting new edit
             if (editingCell && editingCell !== cell) {
-                exitEditMode();
+                exitEditMode(true); // Save current edit
+                // Small delay to ensure cleanup is complete
+                await new Promise(resolve => setTimeout(resolve, 10));
             }
             if (cell.classList.contains('editing-cell')) return;
+            
             editingCell = cell;
-            // Always cache the original value for robust restoration
-            lastEditValue = cell.textContent;
-            cell.classList.add('editing-cell');
+            // Always cache the original HTML content for robust restoration
+            originalContent = cell.innerHTML;
+            
             const id = cell.getAttribute('data-id');
             const field = cell.getAttribute('data-field');
+            const cellKey = `${id}_${field}`;
+            
+            // Initialize cell state
+            cellStates.set(cellKey, {
+                lastTypedValue: null,
+                originalValue: cell.textContent
+            });
+            
+            cell.classList.add('editing-cell');
+            
             // Use == for id match, fallback to cell text if not found
             let exp = expenses.find(e => e.id == id);
             let inputValue = (exp && exp[field] !== undefined && exp[field] !== null) ? exp[field] : cell.textContent;
@@ -758,7 +818,9 @@ function setupInlineEditing(tbody, expenses) {
                 saveInlineEdit(cell, exp, field, newValue, true);
                 return; // Skip the rest of the editing setup
             } else if (field === 'amount') {
-                inputHtml = `<input type="number" class="edit-inline-amount w-full px-1 py-1 rounded text-xs" value="${exp.amount || ''}" step="0.01" />`;
+                // For amount, use the actual numeric value from the expense object
+                const actualAmount = exp.amount !== undefined ? exp.amount : '';
+                inputHtml = `<input type="number" class="edit-inline-amount w-full px-1 py-1 rounded text-xs" value="${actualAmount}" step="0.01" min="0" />`;
             } else if (field === 'date') {
                 inputHtml = `<input type="date" class="edit-inline-date w-full px-1 py-1 rounded text-xs" value="${exp.date || ''}" />`;
             } else if (field === 'who') {
@@ -773,95 +835,99 @@ function setupInlineEditing(tbody, expenses) {
             } else {
                 inputHtml = `<input type="text" class="edit-inline-${field} w-full px-1 py-1 rounded text-xs" value="${inputValue || ''}" />`;
             }
+            
             cell.innerHTML = inputHtml;
             const input = cell.querySelector('input,select');
-            activeInput = input;
-            if (field === 'description') {
-                lastTypedValue = input.value;
+            if (!input) return;
+            
+            const cellState = cellStates.get(cellKey);
+            
+            // Setup field-specific input tracking using per-cell state
+            if (field === 'description' || field === 'amount' || field === 'notes' || field === 'card') {
+                cellState.lastTypedValue = input.value;
                 input.addEventListener('input', () => {
-                    lastTypedValue = input.value;
+                    cellState.lastTypedValue = input.value;
                 });
             }
+            
             if (field === 'who') {
                 const whoSelect = cell.querySelector('.edit-inline-who');
                 const whoCustom = cell.querySelector('.edit-inline-who-custom');
-                whoSelect.addEventListener('change', () => {
-                    if (whoSelect.value === '__custom__') {
-                        whoCustom.style.display = '';
-                        whoCustom.required = true;
-                        whoCustom.focus();
-                    } else {
-                        whoCustom.style.display = 'none';
-                        whoCustom.required = false;
-                    }
-                });
+                if (whoSelect && whoCustom) {
+                    whoSelect.addEventListener('change', () => {
+                        if (whoSelect.value === '__custom__') {
+                            whoCustom.style.display = '';
+                            whoCustom.required = true;
+                            whoCustom.focus();
+                        } else {
+                            whoCustom.style.display = 'none';
+                            whoCustom.required = false;
+                        }
+                    });
+                }
             }
             if (input) input.focus();
             
-            // Save on blur or enter
-            input.addEventListener('blur', () => {
-                // Only handle blur if this cell is still the active editingCell and input is still the active input
-                if (cell !== editingCell || input !== activeInput) return;
+            // Enhanced blur handler
+            const handleBlur = () => {
+                // Only handle blur if this cell is still the active editingCell
+                if (cell !== editingCell) return;
+                
+                const currentState = cellStates.get(cellKey);
+                if (!currentState) return;
+                
                 if (field === 'who') {
                     const whoSelect = cell.querySelector('.edit-inline-who');
                     const whoCustom = cell.querySelector('.edit-inline-who-custom');
-                    let whoVal = whoSelect.value;
-                    if (whoVal === '__custom__') {
+                    let whoVal = whoSelect ? whoSelect.value : '';
+                    if (whoVal === '__custom__' && whoCustom) {
                         whoVal = whoCustom.value.trim();
-                        addOptionToSelect(whoSelect, whoVal);
+                        if (whoSelect && whoVal) addOptionToSelect(whoSelect, whoVal);
                     }
-                    saveInlineEdit(cell, exp, field, whoVal);
+                    saveInlineEdit(cell, exp, field, whoVal, true);
                 } else if (field === 'description') {
-                    const val = (lastTypedValue !== null && lastTypedValue !== undefined) ? lastTypedValue.trim() : input.value.trim();
-                    console.debug('Inline edit save (blur):', { val });
+                    const val = (currentState.lastTypedValue !== null && currentState.lastTypedValue !== undefined) ? currentState.lastTypedValue.trim() : input.value.trim();
                     if (!val) {
                         // If description is empty, restore from cached value and do NOT save
-                        cell.textContent = lastEditValue || '';
+                        cell.innerHTML = originalContent;
                         cell.classList.remove('editing-cell');
+                        cellStates.delete(cellKey);
                         editingCell = null;
                         originalContent = '';
                         return;
                     }
                     // Only save if not empty
-                    saveInlineEdit(cell, exp, field, val);
-                } else {
-                    saveInlineEdit(cell, exp, field, input.value);
-                }
-            });
-            
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    // Only handle Enter if this cell is still the active editingCell and input is still the active input
-                    if (cell !== editingCell || input !== activeInput) return;
-                    if (field === 'who') {
-                        const whoSelect = cell.querySelector('.edit-inline-who');
-                        const whoCustom = cell.querySelector('.edit-inline-who-custom');
-                        let whoVal = whoSelect.value;
-                        if (whoVal === '__custom__') {
-                            whoVal = whoCustom.value.trim();
-                            addOptionToSelect(whoSelect, whoVal);
-                        }
-                        saveInlineEdit(cell, exp, field, whoVal);
-                    } else if (field === 'description') {
-                        const val = (lastTypedValue !== null && lastTypedValue !== undefined) ? lastTypedValue.trim() : input.value.trim();
-                        console.debug('Inline edit save (enter):', { val });
-                        if (!val) {
-                            // If description is empty, restore from cached value and do NOT save
-                            cell.textContent = lastEditValue || '';
-                            cell.classList.remove('editing-cell');
-                            editingCell = null;
-                            originalContent = '';
-                            return;
-                        }
-                        // Only save if not empty
-                        saveInlineEdit(cell, exp, field, val);
-                    } else {
-                        saveInlineEdit(cell, exp, field, input.value);
+                    saveInlineEdit(cell, exp, field, val, true);
+                } else if (field === 'amount') {
+                    let val = input.value;
+                    const numValue = Number(val);
+                    // If empty or invalid, restore original content
+                    if (val === '' || isNaN(numValue) || numValue < 0) {
+                        cell.innerHTML = originalContent;
+                        cell.classList.remove('editing-cell');
+                        cellStates.delete(cellKey);
+                        editingCell = null;
+                        originalContent = '';
+                        return;
                     }
+                    saveInlineEdit(cell, exp, field, val, true);
+                } else {
+                    saveInlineEdit(cell, exp, field, input.value, true);
+                }
+            };
+            
+            const handleKeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleBlur();
                 } else if (e.key === 'Escape') {
                     exitEditMode(false);
                 }
-            });
+            };
+            
+            // Use once: true to prevent duplicate listeners
+            input.addEventListener('blur', handleBlur, { once: true });
+            input.addEventListener('keydown', handleKeydown);
             
             // Prevent click bubbling to tbody
             e.stopPropagation();
@@ -869,11 +935,20 @@ function setupInlineEditing(tbody, expenses) {
     });
 
     // Exit edit mode when clicking outside any cell
-    document.addEventListener('click', function docClick(e) {
+    const docClickHandler = function(e) {
         if (editingCell && !editingCell.contains(e.target)) {
-            exitEditMode(true); // Save changes when clicking outside
+            // Add a small delay to handle rapid clicking
+            setTimeout(() => {
+                if (editingCell && !editingCell.contains(e.target)) {
+                    exitEditMode(true);
+                }
+            }, 10);
         }
-    }, { capture: true });
+    };
+    
+    // Remove any existing handler and add new one
+    document.removeEventListener('click', docClickHandler, { capture: true });
+    document.addEventListener('click', docClickHandler, { capture: true });
 }
 
 function setupAutofillButtons() {
@@ -903,7 +978,7 @@ function setupAutofillButtons() {
         };
     }
     
-    // Floating bulk delete button
+    // Setup bulk delete buttons if they exist
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     if (bulkDeleteBtn) {
         bulkDeleteBtn.onclick = async () => {
@@ -911,45 +986,52 @@ function setupAutofillButtons() {
         };
     }
     
-    // Setup checkbox listeners for floating button visibility
-    setupFloatingButtonVisibility();
+    const floatingDeleteBtn = document.getElementById('floatingDeleteBtn');
+    if (floatingDeleteBtn) {
+        floatingDeleteBtn.onclick = async () => {
+            await handleBulkDelete(floatingDeleteBtn);
+        };
+    }
+    
+    // Setup floating button visibility
+    updateFloatingButtonVisibility();
 }
 
 // Shared bulk delete handler
 async function handleBulkDelete(button) {
-    const selectedIds = getSelectedExpenseIds();
+    const selectedIds = getSelectedExpenseIds(); // FIX: Call the function to get selected IDs
     if (selectedIds.length === 0) {
         alert('Please select at least one expense to delete.');
         return;
     }
-    
+
     const confirmed = confirm(`Are you sure you want to delete ${selectedIds.length} selected expense(s)? This action cannot be undone.`);
     if (!confirmed) return;
-    
+
     const originalText = button.textContent;
     button.disabled = true;
     button.textContent = 'Deleting...';
-    
+
     try {
         await bulkDeleteExpenses(selectedIds);
-        
+
         // Reload data from server to ensure consistency
         if (window.loadExpenses) {
             await window.loadExpenses();
         }
-        
+
         // Clear all checkboxes immediately to avoid stale state
         const checkboxes = document.querySelectorAll('.autofill-row-checkbox, .autofill-header-checkbox');
         checkboxes.forEach(cb => { cb.checked = false; });
-        
+
         // Hide floating button immediately
         updateFloatingButtonVisibility();
-        
+
         // Apply filters to maintain current view
         if (window.applyColumnFilters) {
             window.applyColumnFilters();
         }
-        
+
         alert(`Successfully deleted ${selectedIds.length} expense(s).`);
     } catch (error) {
         console.error('Bulk delete failed:', error);
@@ -960,24 +1042,10 @@ async function handleBulkDelete(button) {
     }
 }
 
-// Setup floating button visibility management
-function setupFloatingButtonVisibility() {
-    // Set up event listeners for checkbox changes
-    document.addEventListener('change', function(event) {
-        if (event.target.classList.contains('autofill-row-checkbox') || 
-            event.target.classList.contains('autofill-header-checkbox')) {
-            updateFloatingButtonVisibility();
-        }
-    });
-    
-    // Initial visibility check
-    updateFloatingButtonVisibility();
-}
-
-// Update floating button visibility based on selected checkboxes
+// Update floating button visibility
 function updateFloatingButtonVisibility() {
-    const selectedIds = getSelectedExpenseIds();
-    const floatingBtn = document.getElementById('floatingDeleteBtn');
+    const selectedIds = getSelectedExpenseIds(); // FIX: Call the function to get selected IDs
+    const floatingBtn = document.getElementById('floatingButtonContainer');
     const selectedCount = document.getElementById('selectedCount');
     
     if (!floatingBtn) return;
