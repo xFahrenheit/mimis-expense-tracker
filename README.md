@@ -9,7 +9,7 @@
 ```bash
 # Clone the repository
 git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
-cd expense_tracker
+cd mimis_expense_tracker
 
 # Install dependencies
 pip install -r server/requirements.txt
