@@ -38,8 +38,19 @@ cd server && python app.py
 ### Second User Setup
 ```bash
 # Clone the shared repository
-git clone <shared-repo-url>
-cd expense_tracker
+git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
+cd mimis_expense_tracker
+
+# (Optional) Create a Python virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Or, create a Conda environment
+conda create -n expense-tracker python=3.8
+conda activate expense-tracker
+
+# (Optional) Create a `.env` file for environment variables
+echo 'EXPENSE_DB_PASSWORD=your-secure-password' > .env
 
 # Install dependencies
 pip install -r server/requirements.txt

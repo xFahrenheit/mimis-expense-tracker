@@ -1,10 +1,65 @@
 import { allExpenses, filteredExpenses, sortState, setFilteredExpenses, setSortState } from './config.js';
 
+// Helper function to safely parse dates
+function parseDate(dateString) {
+    try {
+        const date = new Date(dateString);
+        return isNaN(date.getTime()) ? null : date;
+    } catch (error) {
+        return null;
+    }
+}
+
+// Helper function to compare dates properly
+function isDateInRange(expenseDate, dateFrom, dateTo) {
+    const expDate = parseDate(expenseDate);
+    if (!expDate) return true; // If we can't parse the expense date, don't filter it out
+    
+    let inRange = true;
+    
+    if (dateFrom) {
+        const fromDate = parseDate(dateFrom);
+        if (fromDate) {
+            // Set time to start of day for from date
+            fromDate.setHours(0, 0, 0, 0);
+            expDate.setHours(0, 0, 0, 0);
+            inRange = expDate >= fromDate;
+        }
+    }
+    
+    if (dateTo && inRange) {
+        const toDate = parseDate(dateTo);
+        if (toDate) {
+            // Set time to end of day for to date
+            toDate.setHours(23, 59, 59, 999);
+            expDate.setHours(0, 0, 0, 0);
+            inRange = expDate <= toDate;
+        }
+    }
+    
+    return inRange;
+}
+
+// Get filter values from DOM
+function getFilterValues() {
+    return {
+        dateFrom: document.getElementById('filter-date-from')?.value || '',
+        dateTo: document.getElementById('filter-date-to')?.value || '',
+        description: document.getElementById('filter-description')?.value.toLowerCase() || '',
+        amountMin: document.getElementById('filter-amount-min')?.value || '',
+        amountMax: document.getElementById('filter-amount-max')?.value || '',
+        category: document.getElementById('filter-category')?.value || '',
+        card: document.getElementById('filter-card')?.value || '',
+        who: document.getElementById('filter-who')?.value || '',
+        needCategory: document.getElementById('filter-needcat')?.value || '',
+        notes: document.getElementById('filter-notes')?.value.toLowerCase() || ''
+    };
+}
+
 // Apply column filters and sorting
 export function applyColumnFilters(baseExpenses = null) {
     try {
-        // Use provided baseExpenses, or if no time period is active, use allExpenses
-        // If a time period is active and no baseExpenses provided, get time-period filtered expenses
+        // Determine source expenses
         let sourceExpenses;
         
         if (baseExpenses && Array.isArray(baseExpenses)) {
@@ -14,7 +69,6 @@ export function applyColumnFilters(baseExpenses = null) {
             try {
                 const currentPeriod = window.getCurrentPeriodFilter && window.getCurrentPeriodFilter();
                 if (currentPeriod && currentPeriod !== 'all-time') {
-                    // Use the current filteredExpenses which should be time-period filtered
                     sourceExpenses = Array.isArray(filteredExpenses) ? filteredExpenses : [];
                 } else {
                     sourceExpenses = Array.isArray(allExpenses) ? allExpenses : [];
@@ -25,99 +79,86 @@ export function applyColumnFilters(baseExpenses = null) {
             }
         }
         
-        // Safety check: ensure sourceExpenses is always an array
+        // Safety check
         if (!Array.isArray(sourceExpenses)) {
             console.warn('sourceExpenses is not an array, defaulting to empty array:', sourceExpenses);
             sourceExpenses = [];
         }
         
-        // Get all filter values once (outside the loop)
-        const dateFromEl = document.getElementById('filter-date-from');
-        const dateToEl = document.getElementById('filter-date-to');
-        const dateFrom = dateFromEl ? dateFromEl.value : '';
-        const dateTo = dateToEl ? dateToEl.value : '';
+        // Get all filter values
+        const filters = getFilterValues();
         
-        const descEl = document.getElementById('filter-description');
-        const descVal = descEl ? descEl.value.toLowerCase() : '';
-        
-        const amtMinEl = document.getElementById('filter-amount-min');
-        const amtMaxEl = document.getElementById('filter-amount-max');
-        const amtMin = amtMinEl ? amtMinEl.value : '';
-        const amtMax = amtMaxEl ? amtMaxEl.value : '';
-        
-        const catEl = document.getElementById('filter-category');
-        const cardEl = document.getElementById('filter-card');
-        const whoEl = document.getElementById('filter-who');
-        const needEl = document.getElementById('filter-needcat');
-        const catVal = catEl ? catEl.value : '';
-        const cardVal = cardEl ? cardEl.value : '';
-        const whoVal = whoEl ? whoEl.value : '';
-        const needVal = needEl ? needEl.value : '';
-        
-        const notesEl = document.getElementById('filter-notes');
-        const notesVal = notesEl ? notesEl.value.toLowerCase() : '';
-        
+        // Apply filters
         const filtered = sourceExpenses.filter(expense => {
-            let dateOk = true;
-            if (dateFrom && expense.date) dateOk = expense.date >= dateFrom;
-            if (dateTo && expense.date) dateOk = dateOk && expense.date <= dateTo;
+            // Date range check
+            if (!isDateInRange(expense.date, filters.dateFrom, filters.dateTo)) {
+                return false;
+            }
             
-            // Amount min/max
-            let amtOk = true;
-            if (amtMin !== "" && expense.amount !== undefined) amtOk = Number(expense.amount) >= Number(amtMin);
-            if (amtMax !== "" && expense.amount !== undefined) amtOk = amtOk && Number(expense.amount) <= Number(amtMax);
+            // Amount range check
+            if (filters.amountMin !== "" && expense.amount !== undefined) {
+                if (Number(expense.amount) < Number(filters.amountMin)) return false;
+            }
+            if (filters.amountMax !== "" && expense.amount !== undefined) {
+                if (Number(expense.amount) > Number(filters.amountMax)) return false;
+            }
             
-            // Category, Card, Who, Need
-            let catOk = !catVal || (expense.category === catVal);
-            let cardOk = !cardVal || (expense.card === cardVal);
-            let whoOk = !whoVal || (expense.who === whoVal);
-            let needOk = !needVal || (expense.need_category === needVal);
+            // Dropdown filters
+            if (filters.category && expense.category !== filters.category) return false;
+            if (filters.card && expense.card !== filters.card) return false;
+            if (filters.who && expense.who !== filters.who) return false;
+            if (filters.needCategory && expense.need_category !== filters.needCategory) return false;
             
-            // Description, Notes
-            let descOk = !descVal || (expense.description && expense.description.toLowerCase().includes(descVal));
-            let notesOk = !notesVal || (expense.notes && expense.notes.toLowerCase().includes(notesVal));
+            // Text search filters
+            if (filters.description && (!expense.description || !expense.description.toLowerCase().includes(filters.description))) {
+                return false;
+            }
+            if (filters.notes && (!expense.notes || !expense.notes.toLowerCase().includes(filters.notes))) {
+                return false;
+            }
             
-            return dateOk && amtOk && catOk && cardOk && whoOk && needOk && descOk && notesOk;
+            return true;
         });
         
-        // Sorting
+        // Apply sorting
         if (sortState.column) {
             filtered.sort((a, b) => {
-                let v1 = a[sortState.column], v2 = b[sortState.column];
+                let v1 = a[sortState.column];
+                let v2 = b[sortState.column];
+                
                 if (sortState.column === 'amount') {
-                    v1 = Number(v1); v2 = Number(v2);
+                    v1 = Number(v1) || 0;
+                    v2 = Number(v2) || 0;
+                    return (v1 - v2) * sortState.direction;
                 }
+                
                 if (sortState.column === 'date') {
-                    v1 = v1 || '';
-                    v2 = v2 || '';
-                    // Convert dates to actual Date objects for proper sorting
-                    const date1 = new Date(v1);
-                    const date2 = new Date(v2);
+                    const date1 = parseDate(v1 || '');
+                    const date2 = parseDate(v2 || '');
                     
-                    // Handle invalid dates
-                    if (isNaN(date1.getTime()) && isNaN(date2.getTime())) return 0;
-                    if (isNaN(date1.getTime())) return 1;
-                    if (isNaN(date2.getTime())) return -1;
-                    // Sort by actual date values
+                    if (!date1 && !date2) return 0;
+                    if (!date1) return 1;
+                    if (!date2) return -1;
+                    
                     return (date1.getTime() - date2.getTime()) * sortState.direction;
                 }
-                if (v1 === undefined) v1 = '';
-                if (v2 === undefined) v2 = '';
-                if (typeof v1 === 'number' && typeof v2 === 'number') return (v1 - v2) * sortState.direction;
-                return v1.toString().localeCompare(v2.toString()) * sortState.direction;
+                
+                // String comparison
+                v1 = (v1 || '').toString();
+                v2 = (v2 || '').toString();
+                return v1.localeCompare(v2) * sortState.direction;
             });
         }
         
+        // Update state and UI
         setFilteredExpenses(filtered);
         
-        // Re-render components with filtered data
         if (window.renderExpenses) window.renderExpenses(filtered);
         if (window.renderCharts) window.renderCharts(filtered);
         if (window.updateSpendingBlocks) window.updateSpendingBlocks(filtered);
     
     } catch (error) {
         console.error('Error in applyColumnFilters:', error);
-        // Fallback to rendering empty state
         setFilteredExpenses([]);
         if (window.renderExpenses) window.renderExpenses([]);
     }
@@ -125,30 +166,36 @@ export function applyColumnFilters(baseExpenses = null) {
 
 // Attach filter and sort listeners
 export function attachFilterAndSortListeners() {
-    
-    [
+    const filterIds = [
         'filter-date-from', 'filter-date-to', 'filter-description',
         'filter-amount-min', 'filter-amount-max',
         'filter-category', 'filter-card', 'filter-who', 'filter-notes'
-    ].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('input', applyColumnFilters);
-            if (el.tagName === 'SELECT') {
-                el.addEventListener('change', applyColumnFilters);
+    ];
+    
+    filterIds.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('input', applyColumnFilters);
+            if (element.tagName === 'SELECT') {
+                element.addEventListener('change', applyColumnFilters);
             }
         }
     });
     
     // Sorting listeners
-    const thDate = document.getElementById('th-date');
-    const thAmount = document.getElementById('th-amount');
-    const thDescription = document.getElementById('th-description');
-    if (thDate) thDate.addEventListener('click', () => toggleSort('date'));
-    if (thAmount) thAmount.addEventListener('click', () => toggleSort('amount'));
-    if (thDescription) thDescription.addEventListener('click', () => toggleSort('description'));
+    const sortElements = [
+        { id: 'th-date', column: 'date' },
+        { id: 'th-amount', column: 'amount' },
+        { id: 'th-description', column: 'description' }
+    ];
     
-    // Initialize sort arrows display
+    sortElements.forEach(({ id, column }) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('click', () => toggleSort(column));
+        }
+    });
+    
     updateSortArrows();
     
     // Filter bar show/hide logic
@@ -157,16 +204,20 @@ export function attachFilterAndSortListeners() {
             e.stopPropagation();
             const col = arrow.getAttribute('data-filter');
             const bar = document.getElementById('filterbar-' + col);
+            
+            // Hide all other filter bars
             document.querySelectorAll('.filterbar').forEach(fb => {
                 if (fb !== bar) fb.style.display = 'none';
             });
+            
+            // Toggle current bar
             if (bar) {
                 bar.style.display = (bar.style.display === 'none' || bar.style.display === '') ? 'block' : 'none';
             }
         });
     });
     
-    // Hide filterbars if clicking outside
+    // Hide filterbars when clicking outside
     document.addEventListener('click', (e) => {
         if (!e.target.classList.contains('filter-arrow') && !e.target.closest('.filterbar')) {
             document.querySelectorAll('.filterbar').forEach(fb => fb.style.display = 'none');
@@ -179,7 +230,7 @@ export function toggleSort(column) {
     if (sortState.column === column) {
         setSortState({ ...sortState, direction: sortState.direction * -1 });
     } else {
-        setSortState({ column, direction: -1 }); // Default to descending (newest first for dates)
+        setSortState({ column, direction: -1 });
     }
     
     updateSortArrows();
@@ -188,18 +239,19 @@ export function toggleSort(column) {
 
 // Update sort arrow display
 export function updateSortArrows() {
-    ['date','amount','description'].forEach(col => {
-        const el = document.getElementById('sort-' + col);
-        if (el) {
+    const columns = ['date', 'amount', 'description'];
+    
+    columns.forEach(col => {
+        const element = document.getElementById('sort-' + col);
+        if (element) {
             if (sortState.column === col) {
-                el.innerHTML = sortState.direction === 1 
-                    ? '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M8 4l-4 4h8l-4-4z" fill="var(--mint)"/></svg>' 
+                const direction = sortState.direction === 1 ? 'up' : 'down';
+                element.innerHTML = direction === 'up'
+                    ? '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M8 4l-4 4h8l-4-4z" fill="var(--mint)"/></svg>'
                     : '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M8 12l4-4H4l4 4z" fill="var(--mint)"/></svg>';
             } else {
-                el.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                element.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
             }
         }
     });
 }
-
-

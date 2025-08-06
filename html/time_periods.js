@@ -1,4 +1,4 @@
-// Time Period Management - Database-driven and Dynamic
+// Time Period Management - Clean and Improved with Debugging
 import { allExpenses, filteredExpenses, setFilteredExpenses } from './config.js';
 import { loadExpenses } from './api.js';
 import { updateAllSpendingDisplays } from './render.js';
@@ -8,12 +8,9 @@ let currentPeriodFilter = 'all-time';
 // Get fresh expenses from database/API
 async function getExpensesFromDatabase() {
     try {
-        // If we have expenses in memory, use them
-        if (allExpenses && allExpenses.length > 0) {
+        if (allExpenses?.length > 0) {
             return allExpenses;
         }
-        
-        // Otherwise fetch fresh from API
         await loadExpenses();
         return allExpenses || [];
     } catch (error) {
@@ -22,9 +19,38 @@ async function getExpensesFromDatabase() {
     }
 }
 
+// Parse date safely with timezone awareness
+function parseDate(dateString) {
+    try {
+        if (!dateString) return null;
+        
+        // Handle different date formats
+        let date;
+        
+        // If it's already a Date object, return it
+        if (dateString instanceof Date) {
+            return isNaN(dateString.getTime()) ? null : dateString;
+        }
+        
+        // If it's in ISO format (YYYY-MM-DD), parse as local date to avoid timezone issues
+        if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
+            const [year, month, day] = dateString.trim().split('-').map(num => parseInt(num));
+            date = new Date(year, month - 1, day); // month is 0-based in Date constructor
+        } else {
+            // For other formats, use normal Date parsing
+            date = new Date(dateString);
+        }
+        
+        return isNaN(date.getTime()) ? null : date;
+    } catch (error) {
+        console.warn('Error parsing date:', dateString, error);
+        return null;
+    }
+}
+
 // Get unique time periods from expenses
 function getAvailableTimePeriods(expenses) {
-    if (!expenses || expenses.length === 0) {
+    if (!expenses?.length) {
         return { months: [], years: [] };
     }
 
@@ -32,18 +58,14 @@ function getAvailableTimePeriods(expenses) {
     const years = new Set();
     
     expenses.forEach(expense => {
-        try {
-            const date = new Date(expense.date);
-            if (!isNaN(date.getTime())) {
-                const year = date.getFullYear();
-                const month = date.getMonth();
-                const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
-                
-                periods.add(yearMonth);
-                years.add(year);
-            }
-        } catch (error) {
-            // Skip invalid dates
+        const date = parseDate(expense.date);
+        if (date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const yearMonth = `${year}-${month}`;
+            
+            periods.add(yearMonth);
+            years.add(year);
         }
     });
 
@@ -55,79 +77,59 @@ function getAvailableTimePeriods(expenses) {
 
 // Format period for display
 function formatPeriodDisplay(period) {
-    if (period === 'all-time') {
-        return 'All Time';
-    }
+    if (period === 'all-time') return 'All Time';
     
     if (period.includes('-')) {
-        try {
-            const [year, month] = period.split('-');
-            const date = new Date(year, month - 1);
-            return date.toLocaleDateString('en-US', { 
-                month: 'short', 
-                year: 'numeric' 
-            });
-        } catch (error) {
-            return period;
-        }
-    } else {
-        return period.toString();
+        const [year, month] = period.split('-');
+        const date = new Date(year, month - 1);
+        return date.toLocaleDateString('en-US', { 
+            month: 'short', 
+            year: 'numeric' 
+        });
     }
+    return period.toString();
 }
 
-// Create time period tabs - dynamically from database
+// Create time period tabs
 async function createTimePeriodTabs() {
     try {
         const expenses = await getExpensesFromDatabase();
         const container = document.getElementById('periodTabsContainer');
         
-        if (!container) {
-            return;
-        }
+        if (!container) return;
 
-        // Clear existing tabs
         container.innerHTML = '';
 
-        if (expenses.length === 0) {
+        if (!expenses.length) {
             container.innerHTML = '<span class="text-gray-500 text-sm">No expenses loaded yet</span>';
             return;
         }
 
         const { months, years } = getAvailableTimePeriods(expenses);
-
-        // Create main tabs row container
         const mainTabsRow = document.createElement('div');
         mainTabsRow.className = 'main-period-tabs';
         
-        // Add "All Time" tab
-        const allTimeTab = createPeriodTab('all-time', 'All Time', 'all-time');
-        mainTabsRow.appendChild(allTimeTab);
+        // All Time tab
+        mainTabsRow.appendChild(createPeriodTab('all-time', 'All Time', 'all-time'));
 
-        // Add year tabs
-        const recentYears = years.slice(0, 5);
-        recentYears.forEach(year => {
-            const yearTab = createPeriodTab(year.toString(), year.toString(), 'year');
-            mainTabsRow.appendChild(yearTab);
+        // Year tabs with month containers
+        years.slice(0, 5).forEach(year => {
+            mainTabsRow.appendChild(createPeriodTab(year.toString(), year.toString(), 'year'));
             
-            // Create month container for this year and add it to the main tabs row
             const monthContainer = document.createElement('div');
             monthContainer.className = 'month-deck-container';
             monthContainer.id = `months-${year}`;
             monthContainer.style.display = 'none';
             
-            // Add month tabs for this year
             const yearMonths = months.filter(month => month.startsWith(year.toString()));
-            yearMonths.forEach((month, index) => {
-                const monthTab = createPeriodTab(month, formatPeriodDisplay(month), 'month');
-                monthContainer.appendChild(monthTab);
+            yearMonths.forEach(month => {
+                monthContainer.appendChild(createPeriodTab(month, formatPeriodDisplay(month), 'month'));
             });
             
             mainTabsRow.appendChild(monthContainer);
         });
 
         container.appendChild(mainTabsRow);
-        
-        // Default to "All Time" and ensure it's properly selected
         await selectTimePeriod('all-time');
     } catch (error) {
         console.error('Error creating time period tabs:', error);
@@ -147,10 +149,8 @@ function createPeriodTab(period, displayText, tabType = 'month') {
 
     tab.addEventListener('click', () => {
         if (tabType === 'year') {
-            // Toggle month deck for year tabs
             toggleMonthDeck(period);
         } else {
-            // Regular filtering for non-year tabs
             selectTimePeriod(period);
         }
     });
@@ -158,7 +158,7 @@ function createPeriodTab(period, displayText, tabType = 'month') {
     return tab;
 }
 
-// Toggle month deck expansion for year tabs
+// Toggle month deck expansion
 function toggleMonthDeck(year) {
     const monthContainer = document.getElementById(`months-${year}`);
     const yearTab = document.querySelector(`[data-period="${year}"]`);
@@ -167,41 +167,28 @@ function toggleMonthDeck(year) {
     
     const isExpanded = monthContainer.classList.contains('expanded');
     
-    // Close all other month decks first
+    // Close other decks
     document.querySelectorAll('.month-deck-container').forEach(container => {
         if (container !== monthContainer) {
             container.classList.remove('expanded');
-            setTimeout(() => {
-                container.style.display = 'none';
-            }, 300);
+            setTimeout(() => container.style.display = 'none', 300);
         }
     });
     
-    // Remove expanded class from all year tabs
     document.querySelectorAll('.period-tab-year').forEach(tab => {
         tab.classList.remove('expanded');
     });
     
     if (isExpanded) {
-        // Collapse this deck
         monthContainer.classList.remove('expanded');
-        setTimeout(() => {
-            monthContainer.style.display = 'none';
-        }, 300);
-        
-        // Also filter to show the full year when collapsed
-        selectTimePeriod(year);
+        setTimeout(() => monthContainer.style.display = 'none', 300);
     } else {
-        // Expand this deck
         monthContainer.style.display = 'flex';
         yearTab.classList.add('expanded');
-        setTimeout(() => {
-            monthContainer.classList.add('expanded');
-        }, 10);
-        
-        // Filter to show the full year
-        selectTimePeriod(year);
+        setTimeout(() => monthContainer.classList.add('expanded'), 10);
     }
+    
+    selectTimePeriod(year);
 }
 
 // Select a time period
@@ -209,113 +196,117 @@ async function selectTimePeriod(period) {
     try {
         currentPeriodFilter = period;
         
-        // Update active tab styling
+        // Update active styling
         document.querySelectorAll('.period-tab').forEach(tab => {
-            tab.classList.remove('active');
-            if (tab.dataset.period === period) {
-                tab.classList.add('active');
-            }
+            tab.classList.toggle('active', tab.dataset.period === period);
         });
 
-        // Filter expenses by time period
         await filterExpensesByPeriod(period);
     } catch (error) {
         console.error('Error selecting time period:', error);
     }
 }
 
-// Filter expenses by selected time period
+// Filter expenses by selected time period - FIXED with debugging
 async function filterExpensesByPeriod(period) {
     try {
-        const allExpenses = await getExpensesFromDatabase();
-        let filteredExpenses;
+        const allExpensesData = await getExpensesFromDatabase();
+        let filtered;
+
+        console.log(`🔍 Filtering expenses for period: ${period}`);
+        console.log(`📊 Total expenses to filter: ${allExpensesData.length}`);
 
         if (period === 'all-time') {
-            filteredExpenses = allExpenses;
+            filtered = allExpensesData;
         } else if (period.includes('-')) {
-                        // Month filter: 2025-01 for January 2025
+            // Month filter: 2025-02 for February 2025
             const [targetYear, targetMonth] = period.split('-').map(num => parseInt(num));
-            const adjustedTargetMonth = targetMonth - 1; // Convert to 0-based month
+            console.log(`📅 Filtering for year: ${targetYear}, month: ${targetMonth}`);
             
-            filteredExpenses = allExpenses.filter(expense => {
-                try {
-                    const expenseDate = new Date(expense.date);
-                    const expenseYear = expenseDate.getFullYear();
-                    const expenseMonth = expenseDate.getMonth();
-                    
-                    return expenseYear === targetYear && expenseMonth === adjustedTargetMonth;
-                } catch (error) {
+            filtered = allExpensesData.filter(expense => {
+                const date = parseDate(expense.date);
+                if (!date) {
+                    console.log(`❌ Invalid date for expense:`, expense.date);
                     return false;
                 }
+                
+                const expenseYear = date.getFullYear();
+                const expenseMonth = date.getMonth() + 1; // Convert to 1-based month
+                
+                const matches = expenseYear === targetYear && expenseMonth === targetMonth;
+                
+                // Debug logging for problematic dates
+                if (expenseYear === targetYear && Math.abs(expenseMonth - targetMonth) <= 1) {
+                    console.log(`🔍 Date check: ${expense.date} -> ${date.toISOString()} -> Year: ${expenseYear}, Month: ${expenseMonth}, Matches: ${matches}`);
+                }
+                
+                return matches;
             });
         } else {
-            // Year filter: 2024
-            const year = parseInt(period);
-            filteredExpenses = allExpenses.filter(expense => {
-                try {
-                    const expenseDate = new Date(expense.date);
-                    return expenseDate.getFullYear() === year;
-                } catch (error) {
-                    return false;
-                }
+            // Year filter
+            const targetYear = parseInt(period);
+            console.log(`📅 Filtering for year: ${targetYear}`);
+            
+            filtered = allExpensesData.filter(expense => {
+                const date = parseDate(expense.date);
+                if (!date) return false;
+                
+                return date.getFullYear() === targetYear;
             });
         }
 
-        // Update the global filtered expenses state
-        setFilteredExpenses(filteredExpenses);
+        console.log(`✅ Filtered to ${filtered.length} expenses`);
         
-        // Update quick filter chips based on time-period filtered data
+        // Log some sample dates for debugging
+        if (filtered.length > 0) {
+            const sampleDates = filtered.slice(0, 5).map(e => e.date);
+            console.log(`📋 Sample filtered dates:`, sampleDates);
+        }
+
+        setFilteredExpenses(filtered);
+        
+        // Update UI components - IMPORTANT: Don't call applyColumnFilters here
+        // Let it handle its own data source determination
         if (window.renderQuickFilterChips) {
-            window.renderQuickFilterChips(filteredExpenses);
+            window.renderQuickFilterChips(filtered);
         }
         
-        // Apply column filters to the time-period filtered expenses
-        // This ensures any active column filters are maintained
+        // Instead of calling applyColumnFilters, directly update the UI
+        if (window.renderExpenses) {
+            window.renderExpenses(filtered);
+        }
+        
+        // Then trigger column filters to apply on top of time-period filtered data
         if (window.applyColumnFilters) {
-            window.applyColumnFilters(filteredExpenses);
-        } else {
-            // Fallback to direct rendering if applyColumnFilters not available
-            if (window.renderExpenses) {
-                window.renderExpenses(filteredExpenses);
-            }
+            // Don't pass filtered data - let it determine the source
+            window.applyColumnFilters();
         }
         
-        // Update spending totals
-        updateSpendingTotals(filteredExpenses);
+        updateSpendingTotals(filtered);
     } catch (error) {
         console.error('Error filtering expenses by period:', error);
     }
 }
 
-// Update spending totals for the selected period
+// Update spending totals
 function updateSpendingTotals(expenses) {
     try {
-        // Safety check for expenses array
-        if (!expenses || !Array.isArray(expenses)) {
-            expenses = [];
-        }
-        
-        // Use the single source of truth function
-        updateAllSpendingDisplays(expenses);
+        const safeExpenses = Array.isArray(expenses) ? expenses : [];
+        updateAllSpendingDisplays(safeExpenses);
     } catch (error) {
         console.error('Error updating spending totals:', error);
     }
 }
 
-// Initialize time periods when expenses are loaded
+// Initialize time periods
 async function initializeTimePeriods() {
     try {
-        // Reset to default state on initialization
         currentPeriodFilter = 'all-time';
-        
         await createTimePeriodTabs();
         
-        // Set up refresh button
         const refreshBtn = document.getElementById('refreshPeriodsBtn');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', async () => {
-                await createTimePeriodTabs();
-            });
+            refreshBtn.addEventListener('click', createTimePeriodTabs);
         }
     } catch (error) {
         console.error('Error initializing time periods:', error);
@@ -327,7 +318,7 @@ function getCurrentPeriodFilter() {
     return currentPeriodFilter || 'all-time';
 }
 
-// Export for use by other modules
+// Exports
 export { 
     initializeTimePeriods,
     createTimePeriodTabs, 
@@ -335,6 +326,6 @@ export {
     getCurrentPeriodFilter 
 };
 
-// Make functions available globally for upload handler and chips
+// Global functions
 window.selectTimePeriod = selectTimePeriod;
 window.getCurrentPeriodFilter = getCurrentPeriodFilter;
