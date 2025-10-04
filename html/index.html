@@ -21,9 +21,11 @@
     <div class="w-full p-0 m-0" style="padding-left:18px; padding-right:18px;">
         <div class="logo-banner mb-8 flex justify-between items-center">
             <img src="logo.jpg" alt="Expense Tracker" class="logo-background" />
-            <button id="backupPushBtn" class="btn-backup">
-                💾 Backup & Push
-            </button>
+            <div class="flex items-center gap-3">
+                <button id="manageCategoriesBtn" type="button" class="btn-pastel">Manage Categories</button>
+                <button id="deleteAllBtn" class="btn-pastel-red">Delete All Expenses</button>
+                <button id="backupPushBtn" class="btn-backup">💾 Backup & Push</button>
+            </div>
         </div>
         <!-- Global Loading Banner -->
         <div id="globalLoadingBanner" class="fixed top-0 left-0 w-full z-50 hidden">
@@ -71,8 +73,6 @@
                         <input type="text" id="customCardInput" name="custom_card" class="rounded px-2 py-2" placeholder="Enter card name" style="display:none; min-width:120px;" />
                         <button type="submit" class="btn-pastel">Upload Statement</button>
                         <button id="recategorizeBtn" type="button" class="btn-pastel ml-2">Re-categorize All</button>
-                        <button id="manageCategoriesBtn" type="button" class="btn-pastel ml-2">Manage Categories</button>
-                        <button id="deleteAllBtn" class="btn-pastel-red ml-2" style="margin-left:auto;">Delete All Expenses</button>
 <script>
 // Show/hide custom card input based on dropdown
 document.addEventListener('DOMContentLoaded', function() {
