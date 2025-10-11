@@ -71,15 +71,22 @@
                             <option value="other" data-bank="generic">Other (type below)</option>
                         </select>
                         <input type="text" id="customCardInput" name="custom_card" class="rounded px-2 py-2" placeholder="Enter card name" style="display:none; min-width:120px;" />
+                        <select id="defaultSpenderSelect" name="default_spender" class="rounded px-2 py-2" required>
+                            <option value="">Select Default Spender</option>
+                            <option value="Ameya">Ameya</option>
+                            <option value="Gautami">Gautami</option>
+                        </select>
                         <button type="submit" class="btn-pastel">Upload Statement</button>
                         <button id="recategorizeBtn" type="button" class="btn-pastel ml-2">Re-categorize All</button>
 <script>
-// Show/hide custom card input based on dropdown
+// Show/hide custom card input based on card selection
 document.addEventListener('DOMContentLoaded', function() {
   const cardSelect = document.getElementById('cardSelect');
   const customInput = document.getElementById('customCardInput');
+  
   if (cardSelect && customInput) {
     cardSelect.addEventListener('change', function() {
+      // Show/hide custom card input
       if (cardSelect.value === 'other') {
         customInput.style.display = '';
         customInput.required = true;

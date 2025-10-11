@@ -152,7 +152,7 @@ def get_expenses():
         rows = [dict(zip([column[0] for column in cur.description], row)) for row in cur.fetchall()]
     return jsonify(rows)
 
-def insert_expenses(df, statement_id=None):
+def insert_expenses(df, statement_id=None, default_spender=None):
     with get_db_connection() as conn:
         for _, row in df.iterrows():
             category = row.get('category')
@@ -162,10 +162,10 @@ def insert_expenses(df, statement_id=None):
             if not need_category or pd.isna(need_category):
                 need_category = guess_need_category(row.get('description'), category)
             
-            # Default spender to 'Gautami' if not specified
+            # Use default_spender if provided, otherwise default to 'Gautami'
             who = row.get('who')
             if not who or pd.isna(who):
-                who = 'Gautami'
+                who = default_spender if default_spender else 'Gautami'
             
             split_cost = int(bool(row.get('split_cost', False)))
             outlier = int(bool(row.get('outlier', False)))

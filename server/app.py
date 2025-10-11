@@ -82,6 +82,7 @@ def upload_statement():
         card = request.form.get('card')
         custom_card = request.form.get('custom_card')
         bank_type = request.form.get('bank_type', 'generic')  # Get bank type
+        default_spender = request.form.get('default_spender')  # Get default spender
         if card == 'other' and custom_card:
             card = custom_card.strip()
         # Parse file
@@ -99,7 +100,7 @@ def upload_statement():
             return jsonify({'error': 'Unsupported file type'}), 400
         if card:
             df['card'] = card
-        expense_service.insert_expenses(df, statement_id)
+        expense_service.insert_expenses(df, statement_id, default_spender)
         os.remove(filepath)
         cleanup_service.cleanup_null_rows()
         return jsonify({'success': True, 'count': len(df)})

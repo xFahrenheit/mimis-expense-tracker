@@ -30,7 +30,7 @@ def reimport_statement(statement_id, upload_folder):
         else:
             os.remove(temp_path)
             return jsonify({'error': 'Unsupported file type'}), 400
-        expense_service.insert_expenses(df, statement_id)
+        expense_service.insert_expenses(df, statement_id, None)
         os.remove(temp_path)
     return jsonify({'success': True, 'count': len(df)})
 

@@ -79,6 +79,12 @@ export function setupUploadForm() {
             const bankType = selectedOption.getAttribute('data-bank') || 'generic';
             formData.set('bank_type', bankType);
         }
+        
+        // Include default spender if selected
+        const defaultSpenderSelect = document.getElementById('defaultSpenderSelect');
+        if (defaultSpenderSelect && defaultSpenderSelect.value) {
+            formData.set('default_spender', defaultSpenderSelect.value);
+        }
 
         // Show loading banner and disable upload button
         const loadingBanner = document.getElementById('globalLoadingBanner');
@@ -103,6 +109,7 @@ export function setupUploadForm() {
         // Handle response
         if (res && res.ok) {
             uploadForm.reset();
+            // The default spender dropdown is always visible and form.reset() will handle clearing its value
             if (window.loadStatements) await window.loadStatements();
             if (window.loadExpenses) await window.loadExpenses();
             // Save undo state again after upload (so redo works)
