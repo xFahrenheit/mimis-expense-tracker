@@ -64,3 +64,5 @@ db_backups/
 .env.local
 .env.production
 bashrc
+
+tracker-env/*

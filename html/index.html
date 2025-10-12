@@ -142,16 +142,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <table id="expensesTable">
                         <thead>
                             <tr class="text-purple-200">
-                                <th class="py-2 px-3 w-10 text-center">
-                                    <input type="checkbox" id="selectAllCheckbox" title="Select all rows">
-                                </th>
                                 <th class="py-2 px-3 w-32 cursor-pointer" id="th-date"><div class="flex items-center gap-1"><span>Date</span><span id="sort-date" class="ml-1 filter-arrow" data-filter="date"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
                                     <div id="filterbar-date" class="filterbar" style="display:none">
                                         <input type="date" id="filter-date-from" class="w-20 mt-1 px-1 py-0.5 rounded text-xs" placeholder="From" />
                                         <input type="date" id="filter-date-to" class="w-20 mt-1 px-1 py-0.5 rounded text-xs" placeholder="To" />
                                     </div>
                                 </th>
-                                <th class="py-2 px-3 w-56 cursor-pointer" id="th-description"><div class="flex items-center gap-1"><span>Description</span><span id="sort-description" class="ml-1 filter-arrow" data-filter="description"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                                <th class="py-2 px-3 cursor-pointer" id="th-description"><div class="flex items-center gap-1"><span>Description</span><span id="sort-description" class="ml-1 filter-arrow" data-filter="description"><svg width="16" height="16" viewBox="0 0 16 16" style="display:inline;vertical-align:middle;"><path d="M4 6l4 4 4-4" stroke="var(--mint)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
                                     <div id="filterbar-description" class="filterbar" style="display:none">
                                         <input type="text" id="filter-description" class="w-28 mt-1 px-1 py-0.5 rounded text-xs" placeholder="Filter" />
                                     </div>

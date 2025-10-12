@@ -74,15 +74,6 @@ export async function reimportStatement(id) {
     return res;
 }
 
-// Recategorize all expenses
-export async function recategorizeAll() {
-    const res = await fetch(`${API_URL}/recategorize_all`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-    });
-    return res;
-}
-
 // Get all categories and their metadata
 export async function getCategories() {
     const res = await fetch(`${API_URL}/categories`);

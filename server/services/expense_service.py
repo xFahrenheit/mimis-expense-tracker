@@ -132,19 +132,6 @@ def bulk_delete_expenses(req):
         'requested_count': len(ids)
     })
 
-def recategorize_all_expenses():
-    with get_db_connection() as conn:
-        cur = conn.execute('SELECT id, description FROM expenses')
-        updates = []
-        for row in cur.fetchall():
-            row_id, desc = row
-            new_cat = guess_category(desc)
-            updates.append((new_cat, row_id))
-        conn.executemany('UPDATE expenses SET category = ? WHERE id = ?', updates)
-        conn.commit()
-    return jsonify({'success': True, 'updated': len(updates)})
-from flask import jsonify
-
 def get_expenses():
     """Fetch all expenses from the database and return as JSON list of dicts."""
     with get_db_connection() as conn:

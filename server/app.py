@@ -152,14 +152,6 @@ def patch_expense(row_id):
 def get_expenses():
     return expense_service.get_expenses()
 
-@app.route('/recategorize', methods=['POST'])
-def recategorize_all_expenses():
-    return expense_service.recategorize_all_expenses()
-
-@app.route('/recategorize_all', methods=['POST'])
-def recategorize_all_expenses_new():
-    return expense_service.recategorize_all_expenses()
-
 # --- HTML Page Routes (must come before API routes to avoid conflicts) ---
 @app.route('/')
 def serve_index():

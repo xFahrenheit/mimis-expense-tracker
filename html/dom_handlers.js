@@ -1,5 +1,5 @@
 import { API_URL } from './config.js';
-import { deleteAllExpenses, uploadFile, recategorizeAll } from './api.js';
+import { deleteAllExpenses, uploadFile } from './api.js';
 import { genColors } from './helpers.js';
 
 // Attach delete all button listener

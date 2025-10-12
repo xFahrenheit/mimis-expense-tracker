@@ -416,7 +416,6 @@ function addManualEntryRow(tbody) {
     const addTr = document.createElement('tr');
     addTr.innerHTML = `
         <td class="py-2 px-3 text-center"></td>
-        <td class="py-2 px-3 text-center"></td>
         <td class="py-2 px-3"><input type="date" class="add-date w-full px-1 py-1 rounded text-xs" /></td>
         <td class="py-2 px-3"><input type="text" class="add-description w-full px-1 py-1 rounded text-xs" placeholder="Description" /></td>
         <td class="py-2 px-3"><input type="number" class="add-amount w-full px-1 py-1 rounded text-xs" placeholder="$" step="0.01" /></td>
@@ -455,9 +454,6 @@ function renderExpenseRow(tbody, exp) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td class="py-2 px-3 text-center"><input type="checkbox" class="autofill-row-checkbox" data-id="${exp.id}" /></td>
-        <td class="py-2 px-3 text-center">
-            <button class="text-red-400 hover:text-red-600 font-bold text-lg delete-row-btn" data-id="${exp.id}" title="Delete">×</button>
-        </td>
         <td class="py-2 px-3 editable-cell" data-field="date" data-id="${exp.id}" data-sort-value="${exp.date || ''}">${formatDate(exp.date)}</td>
         <td class="py-2 px-3 editable-cell" data-field="description" data-id="${exp.id}">${exp.description || ''}</td>
         <td class="py-2 px-3 editable-cell" data-field="amount" data-id="${exp.id}">$${Number(exp.amount).toFixed(2)}</td>
@@ -471,6 +467,9 @@ function renderExpenseRow(tbody, exp) {
         <td class="py-2 px-3 text-center"><input type="checkbox" class="split-checkbox" data-id="${exp.id}" ${splitChecked}></td>
         <td class="py-2 px-3 text-center"><input type="checkbox" class="outlier-checkbox" data-id="${exp.id}" ${outlierChecked}></td>
         <td class="py-2 px-3 editable-cell" data-field="notes" data-id="${exp.id}">${exp.notes || ''}</td>
+        <td class="py-2 px-3 text-center">
+            <button class="text-red-400 hover:text-red-600 font-bold text-lg delete-row-btn" data-id="${exp.id}" title="Delete">×</button>
+        </td>
     `;
     tbody.appendChild(tr);
     
