@@ -6,9 +6,38 @@
 DB_FILE="server/expense_tracker.db"
 ENCRYPTED_FILE="expense_tracker_encrypted.db"
 BACKUP_DIR="db_backups"
+DB_REPO_DIR=".db_repo"
 
 # Create backup directory if it doesn't exist
 mkdir -p "$BACKUP_DIR"
+
+# Function to check if EXPENSE_DB_REPO is set
+check_db_repo_env() {
+    if [ -z "$EXPENSE_DB_REPO" ]; then
+        echo "❌ EXPENSE_DB_REPO environment variable not set"
+        echo "   Please set it to your private database repository URL"
+        echo "   Example: export EXPENSE_DB_REPO='git@github.com:username/private-expense-db.git'"
+        exit 1
+    fi
+}
+
+# Function to setup or update the database repository
+setup_db_repo() {
+    if [ ! -d "$DB_REPO_DIR" ]; then
+        echo "📥 Cloning database repository..."
+        git clone "$EXPENSE_DB_REPO" "$DB_REPO_DIR"
+        if [ $? -ne 0 ]; then
+            echo "❌ Failed to clone database repository: $EXPENSE_DB_REPO"
+            exit 1
+        fi
+    else
+        echo "📥 Updating database repository..."
+        cd "$DB_REPO_DIR"
+        git fetch origin
+        git reset --hard origin/main
+        cd ..
+    fi
+}
 
 # Function to delete old backups, keeping only the 7 most recent
 delete_old_backups() {
@@ -41,17 +70,30 @@ cleanup() {
     if [ -f "$DB_FILE.remote" ]; then
         rm "$DB_FILE.remote"
     fi
+    # Clean up local encrypted file (will be copied from repo)
+    if [ -f "$ENCRYPTED_FILE" ]; then
+        rm "$ENCRYPTED_FILE"
+    fi
 }
 
 if [ "$1" = "sync" ]; then
     echo "🔄 Syncing and starting server..."
     cleanup
     
-    # Pull latest changes
-    echo "📥 Pulling latest from GitHub..."
-    git pull
+    # Check environment variable
+    check_db_repo_env
     
-    if [ -f "$ENCRYPTED_FILE" ]; then
+    # Setup/update database repository
+    setup_db_repo
+    
+    # Pull latest changes from main repository (code changes)
+    echo "📥 Pulling latest code from GitHub..."
+    git pull origin main
+    
+    if [ -f "$DB_REPO_DIR/$ENCRYPTED_FILE" ]; then
+        # Copy encrypted database from db repository
+        cp "$DB_REPO_DIR/$ENCRYPTED_FILE" "$ENCRYPTED_FILE"
+        
         # Backup current database if it exists
         if [ -f "$DB_FILE" ]; then
             create_backup
@@ -78,7 +120,7 @@ if [ "$1" = "sync" ]; then
             exit 1
         fi
     else
-        echo "❌ No encrypted database found. Run 'upload' first."
+        echo "❌ No encrypted database found in repository. Run 'upload' first."
         exit 1
     fi
 
@@ -91,20 +133,29 @@ elif [ "$1" = "upload" ]; then
         exit 1
     fi
     
+    # Check environment variable
+    check_db_repo_env
+    
+    # Setup/update database repository
+    setup_db_repo
+    
     # Create backup before uploading
     create_backup
     
-    # Check for remote changes
-    git fetch
+    # Check for remote changes in database repository
+    cd "$DB_REPO_DIR"
+    git fetch origin main
     if ! git diff --quiet HEAD origin/main -- "$ENCRYPTED_FILE" 2>/dev/null; then
         echo "⚠️  WARNING: Remote database has been updated!"
         echo "   Your upload will overwrite those changes."
         read -p "   Continue? (y/N): " confirm
         if [[ $confirm != [yY] ]]; then
             echo "❌ Upload cancelled. Use 'sync' to get latest changes first."
+            cd ..
             exit 1
         fi
     fi
+    cd ..
     
     # Encrypt the database
     echo "🔒 Encrypting database..."
@@ -120,10 +171,18 @@ elif [ "$1" = "upload" ]; then
     
     if [ $? -eq 0 ]; then
         echo "✅ Database encrypted!"
-        echo "📤 Committing to git..."
+        echo "📤 Committing to database repository..."
+        
+        # Copy encrypted file to database repository
+        cp "$ENCRYPTED_FILE" "$DB_REPO_DIR/$ENCRYPTED_FILE"
+        
+        # Commit and push to database repository
+        cd "$DB_REPO_DIR"
         git add "$ENCRYPTED_FILE"
         git commit -m "Update expenses $(date +%Y-%m-%d)"
-        git push
+        git push origin main
+        cd ..
+        
         echo "🎉 Upload complete!"
     else
         echo "❌ Failed to encrypt database."
@@ -144,18 +203,30 @@ elif [ "$1" = "status" ]; then
     
     if [ -f "$ENCRYPTED_FILE" ]; then
         size=$(du -h "$ENCRYPTED_FILE" | cut -f1)
-        echo "✅ Encrypted version: $ENCRYPTED_FILE ($size)"
+        echo "✅ Local encrypted version: $ENCRYPTED_FILE ($size)"
     else
-        echo "❌ Encrypted version: $ENCRYPTED_FILE (missing)"
+        echo "❌ Local encrypted version: $ENCRYPTED_FILE (missing)"
+    fi
+    
+    # Check database repository status
+    if [ -n "$EXPENSE_DB_REPO" ]; then
+        echo "�️  Database repository: $EXPENSE_DB_REPO"
+        if [ -d "$DB_REPO_DIR" ]; then
+            if [ -f "$DB_REPO_DIR/$ENCRYPTED_FILE" ]; then
+                size=$(du -h "$DB_REPO_DIR/$ENCRYPTED_FILE" | cut -f1)
+                echo "✅ Repository encrypted version: $size"
+            else
+                echo "❌ Repository encrypted version: (missing)"
+            fi
+        else
+            echo "❌ Database repository: (not cloned - run 'sync')"
+        fi
+    else
+        echo "❌ EXPENSE_DB_REPO environment variable not set"
     fi
     
     backup_count=$(ls -1 "$BACKUP_DIR"/*.db 2>/dev/null | wc -l)
     echo "📁 Backups: $backup_count files in $BACKUP_DIR/"
-    
-    # Check git status
-    if git status --porcelain | grep -q "$ENCRYPTED_FILE"; then
-        echo "⚠️  Uncommitted changes detected"
-    fi
 
 elif [ "$1" = "backup" ]; then
     echo "📁 Creating manual backup..."
@@ -173,7 +244,11 @@ else
     echo "📊 status  - Show database information"
     echo "📁 backup  - Create manual backup"
     echo ""
-    echo "💡 Daily workflow:"
+    echo "� Required Environment Variables:"
+    echo "   EXPENSE_DB_REPO     - Private repository URL for encrypted database"
+    echo "   EXPENSE_DB_PASSWORD - Encryption password"
+    echo ""
+    echo "�💡 Daily workflow:"
     echo "   './db_manager.sh sync'   - Start your session"
     echo "   './db_manager.sh upload' - End your session"
     exit 1

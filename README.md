@@ -28,16 +28,19 @@ Open `http://127.0.0.1:3001/` in your browser and start tracking expenses!
 cd server && python app.py
 # (Use web interface to add data, then stop server with Ctrl+C)
 
-# 2. Set up encryption password
+# 2. Set up a private repository for database storage
+./setup_db_repo.sh
+
+# 3. Set up encryption password
 ./setup_password.sh
 
-# 3. Encrypt and upload to shared repository
+# 4. Encrypt and upload to your private database repository
 ./db_manager.sh upload
 ```
 
 ### Second User Setup
 ```bash
-# Clone the shared repository
+# Clone the main application repository
 git clone https://github.com/xFahrenheit/mimis-expense-tracker.git
 cd mimis_expense_tracker
 
@@ -55,7 +58,8 @@ echo 'EXPENSE_DB_PASSWORD=your-secure-password' > .env
 # Install dependencies
 pip install -r server/requirements.txt
 
-# Set up the same encryption password
+# Set up the same database repository URL and encryption password
+./setup_db_repo.sh
 ./setup_password.sh
 
 # Download, decrypt database and start server
@@ -65,7 +69,7 @@ pip install -r server/requirements.txt
 ### Daily Workflow
 - **Starting session:** Run `./db_manager.sh sync` (pulls updates and starts server)
 - **Adding expenses:** Use web interface normally  
-- **Sharing changes:** Click "Save & Push" backup button in web interface (encrypts and uploads to shared repo)
+- **Sharing changes:** Click "Save & Push" backup button in web interface (encrypts and uploads to private database repo)
 
 ## ✨ Key Features
 
@@ -91,6 +95,7 @@ pip install -r server/requirements.txt
 ## 🛡️ Security & Privacy
 
 - **AES-256-CBC encryption** for all financial data
+- **Separate private repository** - encrypted database stored in your own private repo
 - **Environment variable passwords** - no interactive prompts
 - **Git-based sharing** - your data never touches third-party services
 - **Local-first** - works completely offline
@@ -112,7 +117,10 @@ pip install -r server/requirements.txt
 
 ### Environment Variables
 ```bash
-# Set encryption password (optional, for automation)
+# Required: Private repository URL for encrypted database storage
+export EXPENSE_DB_REPO="https://github.com/username/my-private-expense-db.git"
+
+# Required: Encryption password for database files
 export EXPENSE_DB_PASSWORD="your-secure-password"
 ```
 
@@ -131,7 +139,8 @@ expense_tracker/
 │   ├── index.html          # Web interface
 │   ├── main.js            # Frontend logic
 │   └── styles.css         # Beautiful styling
-├── db_manager.sh          # Encryption/sync tool
+├── db_manager.sh          # Database encryption/sync tool
+├── setup_db_repo.sh       # Database repository setup
 └── setup_password.sh      # Password configuration
 ```
 
@@ -143,8 +152,9 @@ expense_tracker/
 - Last resort: Start fresh with a new database (you'll lose transaction history)
 
 **Backup button not working?**
-- Ensure `EXPENSE_DB_PASSWORD` environment variable is set
-- Check that git repository is properly configured
+- Ensure both `EXPENSE_DB_PASSWORD` and `EXPENSE_DB_REPO` environment variables are set
+- Check that your private database repository is accessible
+- Verify git authentication is properly configured
 
 **PDF parsing failed?**
 - Verify bank type selection matches your statement

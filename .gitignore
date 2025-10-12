@@ -48,11 +48,14 @@ Thumbs.db
 # Uploads directory (temporary files)
 uploads/
 
-# Database files - keep originals private, only encrypted versions in git
+# Database files - keep originals private, sync encrypted version through secondary repo
 server/*.db
 *.db.remote
 expense_tracker.db
-!expense_tracker_encrypted.db
+expense_tracker_encrypted.db
+
+# Database repository (secondary private repo)
+.db_repo/
 
 # Database backups
 db_backups/

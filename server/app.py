@@ -280,11 +280,17 @@ def backup_and_push():
     import os
     
     try:
-        # Check if password environment variable is set
+        # Check if required environment variables are set
         if 'EXPENSE_DB_PASSWORD' not in os.environ:
             return jsonify({
                 'success': False,
                 'message': 'EXPENSE_DB_PASSWORD environment variable not set'
+            }), 400
+            
+        if 'EXPENSE_DB_REPO' not in os.environ:
+            return jsonify({
+                'success': False,
+                'message': 'EXPENSE_DB_REPO environment variable not set'
             }), 400
         
         # Change to the parent directory (where db_manager.sh is located)
