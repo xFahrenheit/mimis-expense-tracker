@@ -153,10 +153,10 @@ class BaseParser(ABC):
         
         return description
     
-    def _is_payment_or_credit(self, description: str, amount: float) -> bool:
-        """Determine if transaction is a payment or credit"""
-        payment_keywords = ['payment', 'credit', 'redemption', 'thank you', 'autopay', 'online payment']
-        return amount < 0 or any(keyword in description.lower() for keyword in payment_keywords)
+    def _is_payment(self, description: str, amount: float) -> bool:
+        """Determine if transaction is a payment"""
+        payment_keywords = ['payment', 'pymt', 'credit', 'redemption', 'thank you', 'autopay', 'online payment']
+        return amount < 0 and any(keyword in description.lower() for keyword in payment_keywords)
     
     def _should_skip_line(self, line: str) -> bool:
         """Determine if line should be skipped"""
@@ -210,7 +210,7 @@ class ChaseParser(BaseParser):
                     description = self._clean_description(description)
                     
                     # Skip payments and credits
-                    if self._is_payment_or_credit(description, amount):
+                    if self._is_payment(description, amount):
                         logger.debug(f"Skipping payment/credit: {description}")
                         continue
                     
@@ -283,7 +283,7 @@ class DiscoverParser(BaseParser):
                         description = re.sub(r'\s+(Supermarkets|Gas Stations|Restaurants|Department Stores|Entertainment|Travel|Online Services).*$', '', description)
                         
                         # Skip if description contains payment keywords
-                        if self._is_payment_or_credit(description, float(amount_str)):
+                        if self._is_payment(description, float(amount_str)):
                             continue
                         
                         if len(description) > 2:
@@ -361,9 +361,9 @@ class VentureXParser(BaseParser):
                     amount = self._clean_amount(amount_str)
                     description = self._clean_description(description)
                     
-                    # Skip payments/credits or transactions in payment section
-                    is_credit = current_section_type == 'payments' or amount < 0
-                    if is_credit or self._is_payment_or_credit(description, amount):
+                    # Skip payments or transactions in payment section
+                    is_credit = current_section_type == 'payments'
+                    if is_credit and self._is_payment(description, amount):
                         continue
                     
                     amount = abs(amount)
@@ -485,7 +485,7 @@ class GenericParser(BaseParser):
                     description = self._clean_description(description)
                     
                     # Skip payments/credits
-                    if self._is_payment_or_credit(description, amount):
+                    if self._is_payment(description, amount):
                         continue
                     
                     amount = abs(amount)
