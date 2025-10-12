@@ -10,7 +10,7 @@ except ImportError:
     CORS = None
 
 # Import service modules
-from services import database_service, expense_service, category_service, pdf_service, cleanup_service, statement_service
+from services import database_service, expense_service, category_service, pdf_service, cleanup_service, statement_service, staging_service
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'csv', 'pdf'}
@@ -98,12 +98,30 @@ def upload_statement():
             except FileNotFoundError:
                 pass
             return jsonify({'error': 'Unsupported file type'}), 400
+        
         if card:
             df['card'] = card
-        expense_service.insert_expenses(df, statement_id, default_spender)
+        
+        # Save to staging instead of directly inserting
+        metadata = {
+            'card': card,
+            'default_spender': default_spender,
+            'bank_type': bank_type
+        }
+        staging_service.save_staging_data(statement_id, df, metadata)
+        
+        # Clean up uploaded file
         os.remove(filepath)
         cleanup_service.cleanup_null_rows()
-        return jsonify({'success': True, 'count': len(df)})
+        
+        # Return staging redirect info instead of success
+        return jsonify({
+            'success': True, 
+            'staging': True, 
+            'statement_id': statement_id,
+            'count': len(df),
+            'redirect_url': f'/staging/{statement_id}'
+        })
     return jsonify({'error': 'Invalid file'}), 400
 
 @app.route('/expense', methods=['POST'])
@@ -141,6 +159,55 @@ def recategorize_all_expenses():
 @app.route('/recategorize_all', methods=['POST'])
 def recategorize_all_expenses_new():
     return expense_service.recategorize_all_expenses()
+
+# --- HTML Page Routes (must come before API routes to avoid conflicts) ---
+@app.route('/')
+def serve_index():
+    return send_from_directory('../html', 'index.html')
+
+@app.route('/staging/<int:statement_id>')
+def serve_staging(statement_id):
+    return send_from_directory('../html', 'staging.html')
+
+# --- Staging API Endpoints ---
+@app.route('/api/staging', methods=['GET'])
+def get_pending_statements():
+    """Get all statements pending approval in staging"""
+    return staging_service.get_all_pending_statements()
+
+@app.route('/api/staging/<int:statement_id>', methods=['GET'])
+def get_staging_data(statement_id):
+    """Get staging data for a specific statement"""
+    data = staging_service.get_staging_data(statement_id)
+    if not data:
+        return jsonify({'error': 'Statement not found or no staging data'}), 404
+    return jsonify(data)
+
+@app.route('/api/staging/<int:statement_id>/approve', methods=['POST'])
+def approve_staging(statement_id):
+    """Approve and move staging data to main expenses table"""
+    return staging_service.approve_staging_data(statement_id)
+
+@app.route('/api/staging/<int:statement_id>/cancel', methods=['DELETE'])
+def cancel_staging(statement_id):
+    """Cancel staging and delete the statement"""
+    return staging_service.cancel_staging_data(statement_id)
+
+@app.route('/api/staging/<int:statement_id>/recategorize', methods=['POST'])
+def recategorize_staging(statement_id):
+    """Recategorize all expenses in staging for a specific statement"""
+    return staging_service.recategorize_staging_expenses(statement_id)
+
+@app.route('/api/staging/expense/<int:staging_id>', methods=['PATCH'])
+def update_staging_expense(staging_id):
+    """Update a staging expense"""
+    data = request.get_json()
+    return staging_service.update_staging_expense(staging_id, data)
+
+@app.route('/api/staging/expense/<int:staging_id>', methods=['DELETE'])
+def delete_staging_expense(staging_id):
+    """Delete a staging expense"""
+    return staging_service.delete_staging_expense(staging_id)
 
 @app.route('/categories', methods=['GET'])
 def get_categories():
@@ -266,10 +333,6 @@ def backup_and_push():
             'success': False,
             'message': f'Backup failed: {str(e)}'
         }), 500
-
-@app.route('/')
-def serve_index():
-    return send_from_directory('../html', 'index.html')
 
 @app.route('/<path:filename>')
 def serve_static(filename):

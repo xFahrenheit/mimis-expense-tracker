@@ -56,4 +56,32 @@ def init_db():
                 color TEXT DEFAULT '#818cf8'
             )
         ''')
+        
+        # Staging tables for expense review before final insertion
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS staging_expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                statement_id INTEGER,
+                date TEXT,
+                description TEXT,
+                amount REAL,
+                category TEXT,
+                need_category TEXT,
+                card TEXT,
+                who TEXT,
+                notes TEXT,
+                split_cost INTEGER DEFAULT 0,
+                outlier INTEGER DEFAULT 0,
+                FOREIGN KEY(statement_id) REFERENCES statements(id)
+            )
+        ''')
+        
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS staging_metadata (
+                statement_id INTEGER PRIMARY KEY,
+                metadata TEXT,
+                FOREIGN KEY(statement_id) REFERENCES statements(id)
+            )
+        ''')
+        
         conn.commit()

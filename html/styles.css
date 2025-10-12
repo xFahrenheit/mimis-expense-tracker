@@ -18,6 +18,25 @@
     color: #fff;
     outline: none;
 }
+
+/* Pastel Green Button */
+.btn-pastel-green {
+    background: #b3ffb3;
+    color: #2d5016;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Montserrat', 'Segoe UI', sans-serif;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    transition: background 0.2s, color 0.2s;
+    padding: 0.5em 1.2em;
+    cursor: pointer;
+}
+.btn-pastel-green:hover, .btn-pastel-green:focus {
+    background: #80ff80;
+    color: #fff;
+    outline: none;
+}
 /* Quick Filter Chips */
 .quick-filter-chips {
   display: flex;

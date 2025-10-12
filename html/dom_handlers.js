@@ -108,6 +108,16 @@ export function setupUploadForm() {
 
         // Handle response
         if (res && res.ok) {
+            const responseData = await res.json();
+            
+            // Check if this is a staging response
+            if (responseData.staging && responseData.statement_id) {
+                // Redirect to staging page
+                window.location.href = `/staging/${responseData.statement_id}`;
+                return;
+            }
+            
+            // Original success handling for non-staging uploads
             uploadForm.reset();
             // The default spender dropdown is always visible and form.reset() will handle clearing its value
             if (window.loadStatements) await window.loadStatements();
@@ -156,30 +166,4 @@ export function setupUploadForm() {
             }
         }
     });
-    
-    // Setup recategorize button
-    const recategorizeBtn = document.getElementById('recategorizeBtn');
-    if (recategorizeBtn) {
-        recategorizeBtn.addEventListener('click', async () => {
-            recategorizeBtn.disabled = true;
-            recategorizeBtn.textContent = 'Processing...';
-            
-            try {
-                const res = await recategorizeAll();
-                if (res.ok) {
-                    recategorizeBtn.textContent = 'Done!';
-                    if (window.loadExpenses) await window.loadExpenses();
-                } else {
-                    recategorizeBtn.textContent = 'Error!';
-                }
-            } catch (e) {
-                recategorizeBtn.textContent = 'Error!';
-            }
-            
-            setTimeout(() => {
-                recategorizeBtn.textContent = 'Re-categorize All';
-                recategorizeBtn.disabled = false;
-            }, 2000);
-        });
-    }
 }
