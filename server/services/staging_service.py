@@ -1,7 +1,7 @@
 from flask import request, abort, jsonify
 from .database_service import get_db_connection
 from .category_service import guess_category, guess_need_category
-from . import expense_service
+from . import expense_service, user_rules_service
 import pandas as pd
 import json
 
@@ -117,13 +117,12 @@ def update_staging_expense(staging_id, data):
             cur = conn.execute('SELECT description FROM staging_expenses WHERE id = ?', (staging_id,))
             row = cur.fetchone()
             if row:
-                desc_norm = row[0].lower().strip()
-                if 'category' in data:
-                    conn.execute('INSERT OR REPLACE INTO user_overrides (description, category) VALUES (?, ?)', 
-                               (desc_norm, data['category']))
-                if 'need_category' in data:
-                    conn.execute('INSERT OR REPLACE INTO user_overrides (description, need_category) VALUES (?, ?)', 
-                               (desc_norm, data['need_category']))
+                # Use consolidated user rules function
+                category = data.get('category')
+                need_category = data.get('need_category')
+                user_rules_service.update_user_override_for_expense(
+                    row[0], category=category, need_category=need_category, conn=conn
+                )
         
         conn.commit()
     

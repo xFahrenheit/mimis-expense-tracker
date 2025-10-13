@@ -1,6 +1,7 @@
 from flask import request, abort, jsonify
 from .database_service import get_db_connection
 from .category_service import guess_category, guess_need_category
+from . import user_rules_service
 import pandas as pd
 
 def read_csv(filepath):
@@ -48,8 +49,10 @@ def update_expense_category(row_id, req):
         cur = conn.execute('SELECT description FROM expenses WHERE id = ?', (row_id,))
         row = cur.fetchone()
         if row:
-            desc_norm = row[0].lower().strip()
-            conn.execute('INSERT OR REPLACE INTO user_overrides (description, category) VALUES (?, ?)', (desc_norm, new_cat))
+            # Use consolidated user rules function
+            user_rules_service.update_user_override_for_expense(
+                row[0], category=new_cat, conn=conn
+            )
         conn.commit()
     return jsonify({'success': True, 'id': row_id, 'category': new_cat})
 
@@ -63,8 +66,10 @@ def update_expense_need_category(row_id, req):
         cur = conn.execute('SELECT description FROM expenses WHERE id = ?', (row_id,))
         row = cur.fetchone()
         if row:
-            desc_norm = row[0].lower().strip()
-            conn.execute('INSERT OR REPLACE INTO user_overrides (description, need_category) VALUES (?, ?)', (desc_norm, new_need))
+            # Use consolidated user rules function
+            user_rules_service.update_user_override_for_expense(
+                row[0], need_category=new_need, conn=conn
+            )
         conn.commit()
     return jsonify({'success': True, 'id': row_id, 'need_category': new_need})
 
@@ -86,13 +91,12 @@ def patch_expense(row_id, req):
             cur = conn.execute('SELECT description FROM expenses WHERE id = ?', (row_id,))
             row = cur.fetchone()
             if row:
-                desc_norm = row[0].lower().strip()
+                # Use consolidated user rules function
                 cat = data.get('category')
                 need = data.get('need_category')
-                if cat:
-                    conn.execute('INSERT OR REPLACE INTO user_overrides (description, category) VALUES (?, ?)', (desc_norm, cat))
-                if need:
-                    conn.execute('INSERT OR REPLACE INTO user_overrides (description, need_category) VALUES (?, ?)', (desc_norm, need))
+                user_rules_service.update_user_override_for_expense(
+                    row[0], category=cat, need_category=need, conn=conn
+                )
         conn.commit()
     return jsonify({'success': True, 'id': row_id})
 

@@ -2,6 +2,51 @@ import sqlite3
 from flask import jsonify
 from .database_service import get_db_connection
 
+def update_user_override_for_expense(description, category=None, need_category=None, conn=None):
+    """
+    Utility function to update user overrides when an expense is categorized.
+    This consolidates the logic used across multiple services.
+    
+    Args:
+        description: The transaction description (will be normalized)
+        category: Category to set (optional)
+        need_category: Need category to set (optional)
+        conn: Database connection to use (optional, will create new if not provided)
+    """
+    if not description or not description.strip():
+        return
+    
+    desc_norm = description.strip().lower()
+    
+    # Use provided connection or create new one
+    if conn:
+        _update_override_with_conn(conn, desc_norm, category, need_category)
+    else:
+        with get_db_connection() as new_conn:
+            _update_override_with_conn(new_conn, desc_norm, category, need_category)
+
+def _update_override_with_conn(conn, desc_norm, category=None, need_category=None):
+    """
+    Helper function to update or insert user overrides with a given connection.
+    This is the core logic used by both API endpoints and internal expense updates.
+    """
+    # Get existing rule to merge with new data
+    existing = conn.execute(
+        'SELECT category, need_category FROM user_overrides WHERE description = ?',
+        (desc_norm,)
+    ).fetchone()
+    
+    # Determine final values (new values override existing ones)
+    final_category = category if category is not None else (existing[0] if existing else None)
+    final_need_category = need_category if need_category is not None else (existing[1] if existing else None)
+    
+    # Update or insert the rule with merged data
+    if final_category is not None or final_need_category is not None:
+        conn.execute('''
+            INSERT OR REPLACE INTO user_overrides (description, category, need_category) 
+            VALUES (?, ?, ?)
+        ''', (desc_norm, final_category, final_need_category))
+
 def get_all_user_rules():
     """Get all user override rules from the database."""
     try:
@@ -28,25 +73,21 @@ def add_user_rule(description, category=None, need_category=None):
     if not description or not description.strip():
         return jsonify({'success': False, 'error': 'Description is required'}), 400
     
-    description = description.strip().lower()
+    desc_norm = description.strip().lower()
     
     try:
         with get_db_connection() as conn:
-            # Check if rule already exists
+            # Check if rule already exists (for API validation)
             existing = conn.execute(
                 'SELECT description FROM user_overrides WHERE description = ?', 
-                (description,)
+                (desc_norm,)
             ).fetchone()
             
             if existing:
                 return jsonify({'success': False, 'error': 'User rule already exists for this description'}), 409
             
-            # Insert new rule
-            conn.execute('''
-                INSERT INTO user_overrides (description, category, need_category) 
-                VALUES (?, ?, ?)
-            ''', (description, category if category else None, need_category if need_category else None))
-            
+            # Use the consolidated function to insert the rule
+            _update_override_with_conn(conn, desc_norm, category, need_category)
             conn.commit()
             
             return jsonify({
@@ -63,26 +104,21 @@ def update_user_rule(description, category=None, need_category=None):
     if not description or not description.strip():
         return jsonify({'success': False, 'error': 'Description is required'}), 400
     
-    description = description.strip().lower()
+    desc_norm = description.strip().lower()
     
     try:
         with get_db_connection() as conn:
-            # Check if rule exists
+            # Check if rule exists (for API validation)
             existing = conn.execute(
                 'SELECT description FROM user_overrides WHERE description = ?', 
-                (description,)
+                (desc_norm,)
             ).fetchone()
             
             if not existing:
                 return jsonify({'success': False, 'error': 'User rule not found'}), 404
             
-            # Update rule
-            conn.execute('''
-                UPDATE user_overrides 
-                SET category = ?, need_category = ? 
-                WHERE description = ?
-            ''', (category if category else None, need_category if need_category else None, description))
-            
+            # Use the consolidated function to update the rule (preserves existing data)
+            _update_override_with_conn(conn, desc_norm, category, need_category)
             conn.commit()
             
             return jsonify({
