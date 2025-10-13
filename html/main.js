@@ -381,6 +381,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
     }
     
+    // Setup manage user rules button
+    const manageUserRulesBtn = document.getElementById('manageUserRulesBtn');
+    if (manageUserRulesBtn) {
+        manageUserRulesBtn.addEventListener('click', async () => {
+            const { showUserRulesModal } = await import('./user_rules.js');
+            showUserRulesModal();
+        });
+    }
+    
     // Setup backup and push button
     const backupPushBtn = document.getElementById('backupPushBtn');
     if (backupPushBtn) {

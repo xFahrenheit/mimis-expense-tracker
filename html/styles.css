@@ -1311,3 +1311,106 @@ td .delete-row-btn {
 }
 
 /* Category Management Modal Styles */
+
+/* User Rules Management Modal Styles */
+.add-user-rule-section {
+    margin-bottom: 1.5rem;
+}
+
+.add-user-rule-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.add-user-rule-form input,
+.add-user-rule-form select {
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.add-user-rule-form input:focus,
+.add-user-rule-form select:focus {
+    outline: none;
+    border-color: var(--mint);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+}
+
+.user-rules-list {
+    max-height: 24rem;
+    overflow-y: auto;
+}
+
+.user-rule-item {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    transition: background-color 0.2s;
+}
+
+.user-rule-item:hover {
+    background-color: #f3f4f6;
+}
+
+.user-rule-item button {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.user-rule-item button:hover {
+    background-color: #f9fafb;
+}
+
+.user-rules-search {
+    margin-bottom: 0.75rem;
+}
+
+.user-rules-search input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+}
+
+.user-rules-search input:focus {
+    outline: none;
+    border-color: var(--mint);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+}
+
+.btn-small {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 0.375rem;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--mint);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #059669;
+}
+
+.divider {
+    height: 1px;
+    background-color: #e5e7eb;
+    margin: 1.5rem 0;
+}

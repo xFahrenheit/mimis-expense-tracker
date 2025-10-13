@@ -10,7 +10,7 @@ except ImportError:
     CORS = None
 
 # Import service modules
-from services import database_service, expense_service, category_service, pdf_service, cleanup_service, statement_service, staging_service
+from services import database_service, expense_service, category_service, pdf_service, cleanup_service, statement_service, staging_service, user_rules_service
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'csv', 'pdf'}
@@ -272,6 +272,45 @@ def list_statements():
 @app.route('/statement/<int:statement_id>/reimport', methods=['POST'])
 def reimport_statement(statement_id):
     return statement_service.reimport_statement(statement_id, app.config['UPLOAD_FOLDER'])
+
+# --- User Override Rules Endpoints ---
+@app.route('/user_rules', methods=['GET'])
+def get_user_rules():
+    """Get all user override rules"""
+    search_term = request.args.get('search', '')
+    if search_term:
+        return user_rules_service.search_user_rules(search_term)
+    return user_rules_service.get_all_user_rules()
+
+@app.route('/user_rules', methods=['POST'])
+def add_user_rule():
+    """Add a new user override rule"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    description = data.get('description', '').strip()
+    category = data.get('category', '').strip() if data.get('category') else None
+    need_category = data.get('need_category', '').strip() if data.get('need_category') else None
+    
+    return user_rules_service.add_user_rule(description, category, need_category)
+
+@app.route('/user_rules/<rule_description>', methods=['PATCH'])
+def update_user_rule(rule_description):
+    """Update an existing user override rule"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    category = data.get('category', '').strip() if data.get('category') else None
+    need_category = data.get('need_category', '').strip() if data.get('need_category') else None
+    
+    return user_rules_service.update_user_rule(rule_description, category, need_category)
+
+@app.route('/user_rules/<rule_description>', methods=['DELETE'])
+def delete_user_rule(rule_description):
+    """Delete a user override rule"""
+    return user_rules_service.delete_user_rule(rule_description)
 
 @app.route('/backup-and-push', methods=['POST'])
 def backup_and_push():
