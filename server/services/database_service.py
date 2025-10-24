@@ -84,4 +84,47 @@ def init_db():
             )
         ''')
         
+        # Income tracking tables
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS income_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                amount REAL NOT NULL,
+                source TEXT NOT NULL,
+                user TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT,
+                notes TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            )
+        ''')
+        
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS monthly_income_overrides (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                user TEXT NOT NULL,
+                amount REAL NOT NULL,
+                notes TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT,
+                UNIQUE(year, month, user)
+            )
+        ''')
+        
+        # Add user column to existing income tables if they don't have it
+        try:
+            conn.execute('ALTER TABLE income_records ADD COLUMN user TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            conn.execute('ALTER TABLE monthly_income_overrides ADD COLUMN user TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        # Update existing records with default user if user column is NULL
+        conn.execute("UPDATE income_records SET user = 'Ameya' WHERE user IS NULL")
+        conn.execute("UPDATE monthly_income_overrides SET user = 'Ameya' WHERE user IS NULL")
+        
         conn.commit()

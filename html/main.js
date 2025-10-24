@@ -291,6 +291,16 @@ import { exportFilteredToCSV, setupDarkModeToggle, setupAnalyticsToggle, setupNo
 import { renderExpenses, renderFilters, renderStatements, calculateSpendingTotals, updateAllSpendingDisplays } from './render.js';
 import { attachDeleteAllBtnListener, setupTabSwitching, setupUploadForm } from './dom_handlers.js';
 import { createTimePeriodTabs, initializeTimePeriods } from './time_periods.js';
+import { 
+    loadIncomeRecords, 
+    loadIncomeDistribution, 
+    renderIncomeRecords, 
+    renderIncomeCharts, 
+    renderMonthlyIncomeTable,
+    refreshIncomeData,
+    handleAddIncomeForm,
+    handleEditMonthlyIncomeForm
+} from './income.js';
 
 // Register ChartDataLabels plugin globally
 if (window.Chart && window.ChartDataLabels) {
@@ -388,6 +398,17 @@ window.addEventListener('DOMContentLoaded', async () => {
             const { showUserRulesModal } = await import('./user_rules.js');
             showUserRulesModal();
         });
+    }
+    
+    // Setup income form handlers
+    const addIncomeForm = document.getElementById('addIncomeForm');
+    if (addIncomeForm) {
+        addIncomeForm.addEventListener('submit', handleAddIncomeForm);
+    }
+    
+    const editMonthlyIncomeForm = document.getElementById('editMonthlyIncomeForm');
+    if (editMonthlyIncomeForm) {
+        editMonthlyIncomeForm.addEventListener('submit', handleEditMonthlyIncomeForm);
     }
     
     // Setup backup and push button

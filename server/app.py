@@ -10,7 +10,7 @@ except ImportError:
     CORS = None
 
 # Import service modules
-from services import database_service, expense_service, category_service, pdf_service, cleanup_service, statement_service, staging_service, user_rules_service
+from services import database_service, expense_service, category_service, pdf_service, cleanup_service, statement_service, staging_service, user_rules_service, income_service
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'csv', 'pdf'}
@@ -311,6 +311,77 @@ def update_user_rule(rule_description):
 def delete_user_rule(rule_description):
     """Delete a user override rule"""
     return user_rules_service.delete_user_rule(rule_description)
+
+# --- Income Management Endpoints ---
+@app.route('/income', methods=['GET'])
+def get_income_records():
+    """Get all income records"""
+    return income_service.get_all_income_records()
+
+@app.route('/income', methods=['POST'])
+def add_income_record():
+    """Add a new income record"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    required_fields = ['amount', 'source', 'user', 'start_date']
+    for field in required_fields:
+        if field not in data or not data[field]:
+            return jsonify({'success': False, 'error': f'{field} is required'}), 400
+    
+    return income_service.add_income_record(data)
+
+@app.route('/income/<int:record_id>', methods=['PATCH'])
+def update_income_record(record_id):
+    """Update an existing income record"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    return income_service.update_income_record(record_id, data)
+
+@app.route('/income/<int:record_id>', methods=['DELETE'])
+def delete_income_record(record_id):
+    """Delete an income record"""
+    return income_service.delete_income_record(record_id)
+
+@app.route('/income/monthly/<int:year>/<int:month>', methods=['GET'])
+def get_monthly_income(year, month):
+    """Get monthly income for a specific month/year"""
+    return income_service.get_monthly_income_with_overrides(year, month)
+
+@app.route('/income/distribution', methods=['GET'])
+def get_income_distribution():
+    """Get income distribution data for analytics"""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    return income_service.get_income_distribution(start_date, end_date)
+
+@app.route('/income/monthly_override', methods=['POST'])
+def add_monthly_income_override():
+    """Add or update a monthly income override"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    required_fields = ['year', 'month', 'user', 'amount']
+    for field in required_fields:
+        if field not in data:
+            return jsonify({'success': False, 'error': f'{field} is required'}), 400
+    
+    return income_service.add_monthly_income_override(
+        data['year'], 
+        data['month'], 
+        data['user'],
+        data['amount'], 
+        data.get('notes', '')
+    )
+
+@app.route('/income/monthly_override/<int:year>/<int:month>', methods=['DELETE'])
+def delete_monthly_income_override(year, month):
+    """Delete a monthly income override"""
+    return income_service.delete_monthly_income_override(year, month)
 
 @app.route('/backup-and-push', methods=['POST'])
 def backup_and_push():

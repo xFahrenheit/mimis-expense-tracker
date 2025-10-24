@@ -332,9 +332,99 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             <div id="tab-income" class="tab-content" style="display:none;">
-                <div class="glass-block p-4 mb-8">
-                    <h2 class="text-lg font-semibold mb-2 text-purple-200">Income Distribution</h2>
-                    <div id="incomeDistributionContent">Coming soon...</div>
+                <!-- Income Management Header -->
+                <div class="glass-block p-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 class="text-2xl font-bold text-purple-200 mb-2">Income Distribution</h2>
+                            <p class="text-gray-300 text-sm">Track and manage your monthly income sources</p>
+                        </div>
+                        <button onclick="showAddIncomeModal()" class="btn-pastel">
+                            ➕ Add Income Record
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Income Summary Cards -->
+                <div class="income-summary grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="summary-card glass-block p-4">
+                        <div class="summary-icon">💰</div>
+                        <div class="summary-label">Total Monthly Income</div>
+                        <div id="totalMonthlyIncome" class="summary-value">$0</div>
+                        <div id="incomeSourceCount" class="summary-change">0 sources</div>
+                    </div>
+                    <div class="summary-card glass-block p-4">
+                        <div class="summary-icon">📈</div>
+                        <div class="summary-label">This Month</div>
+                        <div id="currentMonthIncome" class="summary-value">$0</div>
+                        <div id="currentMonthChange" class="summary-change">--</div>
+                    </div>
+                    <div class="summary-card glass-block p-4">
+                        <div class="summary-icon">📊</div>
+                        <div class="summary-label">Primary Source</div>
+                        <div id="primaryIncomeSource" class="summary-value">--</div>
+                        <div id="primarySourceAmount" class="summary-change">$0</div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="charts-row mb-6">
+                    <div class="chart-bg p-6">
+                        <h2 class="text-lg font-semibold mb-4 text-purple-200">Income by Source</h2>
+                        <canvas id="incomeSourceChart" height="320"></canvas>
+                    </div>
+                    <div class="chart-bg p-6">
+                        <h2 class="text-lg font-semibold mb-4 text-purple-200">Monthly Income Trend</h2>
+                        <canvas id="monthlyIncomeChart" height="320"></canvas>
+                    </div>
+                </div>
+
+                <!-- Income Records Management -->
+                <div class="glass-block p-4 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-purple-200">Income Records</h3>
+                        <span class="text-sm text-gray-400">Ongoing income sources</span>
+                    </div>
+                    <div id="incomeRecordsContainer">
+                        <!-- Income records will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Monthly Income Overview -->
+                <div class="glass-block p-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-purple-200">Monthly Income History</h3>
+                        <span class="text-sm text-gray-400">Click to edit retroactively</span>
+                    </div>
+                    
+                    <!-- Legend for overrides -->
+                    <div class="mb-4 p-3 bg-gray-50 rounded border">
+                        <div class="text-sm text-gray-600 mb-2">
+                            <strong>Legend:</strong>
+                        </div>
+                        <div class="flex flex-wrap gap-4 text-xs">
+                            <div class="flex items-center gap-1">
+                                <span class="w-3 h-3 bg-green-100 rounded border"></span>
+                                <span>Current Month</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <span class="w-3 h-3 bg-yellow-50 rounded border border-orange-200"></span>
+                                <span class="text-orange-600">✏️ Manually Overridden</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <span class="text-orange-600">*</span>
+                                <span>Override amount</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <span class="text-gray-500">🗑️</span>
+                                <span>Remove override (revert to auto-calculated)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="monthlyIncomeTableContainer">
+                        <!-- Monthly income table will be rendered here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -412,5 +502,114 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         </div>
     </div>
+
+    <!-- Add Income Record Modal -->
+    <div id="addIncomeModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Income Record</h2>
+                <span class="modal-close" onclick="hideAddIncomeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="addIncomeForm">
+                    <div class="form-row mb-4">
+                        <label for="incomeAmount" class="form-label">Monthly Amount *</label>
+                        <input type="number" id="incomeAmount" name="amount" step="0.01" min="0" 
+                               class="form-input" placeholder="5000.00" required>
+                    </div>
+                    
+                    <div class="form-row mb-4">
+                        <label for="incomeUser" class="form-label">Person *</label>
+                        <select id="incomeUser" name="user" class="form-input" required>
+                            <option value="">Select Person</option>
+                            <option value="Ameya">Ameya</option>
+                            <option value="Gautami">Gautami</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row mb-4">
+                        <label for="incomeSource" class="form-label">Income Source *</label>
+                        <input type="text" id="incomeSource" name="source" 
+                               class="form-input" placeholder="Salary, Freelance, Rental, etc." required>
+                    </div>
+                    
+                    <div class="form-row mb-4">
+                        <label for="incomeStartDate" class="form-label">Start Date *</label>
+                        <input type="date" id="incomeStartDate" name="start_date" 
+                               class="form-input" required>
+                    </div>
+                    
+                    <div class="form-row mb-4">
+                        <label for="incomeEndDate" class="form-label">End Date</label>
+                        <input type="date" id="incomeEndDate" name="end_date" 
+                               class="form-input" placeholder="Leave empty for ongoing income">
+                        <small class="text-gray-500">Leave empty if this is ongoing income</small>
+                    </div>
+                    
+                    <div class="form-row mb-6">
+                        <label for="incomeNotes" class="form-label">Notes</label>
+                        <textarea id="incomeNotes" name="notes" rows="3" 
+                                  class="form-input" placeholder="Additional notes about this income source"></textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" onclick="hideAddIncomeModal()" class="btn-secondary mr-3">Cancel</button>
+                        <button type="submit" class="btn-primary">Add Income Record</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Monthly Income Modal -->
+    <div id="editMonthlyIncomeModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="editMonthTitle">Edit Monthly Income</h2>
+                <span class="modal-close" onclick="hideEditMonthlyIncomeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="editMonthlyIncomeForm">
+                    <input type="hidden" id="editMonthYear" name="year">
+                    <input type="hidden" id="editMonthMonth" name="month">
+                    
+                    <div class="form-row mb-4">
+                        <label for="editMonthUser" class="form-label">Person *</label>
+                        <select id="editMonthUser" name="user" class="form-input" required>
+                            <option value="">Select Person</option>
+                            <option value="Ameya">Ameya</option>
+                            <option value="Gautami">Gautami</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row mb-4">
+                        <label for="editMonthAmount" class="form-label">Income Amount *</label>
+                        <input type="number" id="editMonthAmount" name="amount" step="0.01" min="0" 
+                               class="form-input" required>
+                    </div>
+                    
+                    <div class="form-row mb-6">
+                        <label for="editMonthNotes" class="form-label">Notes</label>
+                        <textarea id="editMonthNotes" name="notes" rows="3" 
+                                  class="form-input" placeholder="Notes about this month's income"></textarea>
+                    </div>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
+                        <p class="text-sm text-yellow-800">
+                            <strong>Note:</strong> This will override the calculated income for this specific month. 
+                            You can delete this override later to revert to the automatic calculation.
+                        </p>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" onclick="hideEditMonthlyIncomeModal()" class="btn-secondary mr-3">Cancel</button>
+                        <button type="submit" class="btn-primary">Update Monthly Income</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="income.js" type="module"></script>
 </body>
 </html>

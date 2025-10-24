@@ -45,12 +45,22 @@ export function attachDeleteAllBtnListener() {
 // Setup tab switching functionality
 export function setupTabSwitching() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             const tab = btn.getAttribute('data-tab');
             document.querySelectorAll('.tab-content').forEach(tc => tc.style.display = 'none');
             document.getElementById('tab-' + tab).style.display = '';
+            
+            // Initialize income data when income tab is selected
+            if (tab === 'income') {
+                try {
+                    const { refreshIncomeData } = await import('./income.js');
+                    await refreshIncomeData();
+                } catch (error) {
+                    console.error('Error loading income data:', error);
+                }
+            }
         });
     });
     

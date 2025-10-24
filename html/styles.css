@@ -1414,3 +1414,223 @@ td .delete-row-btn {
     background-color: #e5e7eb;
     margin: 1.5rem 0;
 }
+
+/* Income Management Styles */
+.income-summary {
+    margin-bottom: 2rem;
+}
+
+.income-record-card {
+    transition: all 0.2s ease;
+    border-left: 4px solid var(--mint);
+}
+
+.income-record-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.income-record-card .source-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--purple-200);
+}
+
+.income-record-card .amount {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #10b981;
+}
+
+.income-record-card .date-range {
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+}
+
+.income-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+    .income-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.monthly-income-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.monthly-income-table th,
+.monthly-income-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.monthly-income-table th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    color: var(--purple-200);
+}
+
+.monthly-income-table tr:hover {
+    background-color: #f9fafb;
+}
+
+.monthly-income-table .current-month {
+    background-color: rgba(16, 185, 129, 0.1);
+}
+
+.monthly-income-table .income-amount {
+    font-weight: bold;
+    color: #10b981;
+    font-size: 1.125rem;
+}
+
+/* Modal Styles for Income */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+    padding: 1.5rem 1.5rem 0 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0;
+}
+
+.modal-close {
+    font-size: 1.5rem;
+    color: #9ca3af;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #374151;
+}
+
+.modal-body {
+    padding: 0 1.5rem 1.5rem 1.5rem;
+}
+
+.form-row {
+    margin-bottom: 1rem;
+}
+
+.form-label {
+    display: block;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 0.25rem;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--mint);
+    box-shadow: 0 0 0 1px var(--mint);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+/* Income-specific summary cards */
+.income-summary .summary-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-left: 4px solid #10b981;
+}
+
+.income-summary .summary-icon {
+    color: #10b981;
+}
+
+.income-summary .summary-value {
+    color: #10b981;
+}
+
+/* Override highlight */
+.income-override-indicator {
+    background: #fef3c7;
+    color: #92400e;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Income trend indicators */
+.income-trend-up {
+    color: #10b981;
+}
+
+.income-trend-down {
+    color: #ef4444;
+}
+
+.income-trend-neutral {
+    color: #6b7280;
+}
