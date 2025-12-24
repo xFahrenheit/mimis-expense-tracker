@@ -10,7 +10,10 @@
     font-weight: 600;
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     transition: background 0.2s, color 0.2s;
-    padding: 0.5em 1.2em;
+    display: inline-block !important;
+    min-width: 140px !important;
+    text-align: center !important;
+    padding: 0.8rem 1rem !important;
     cursor: pointer;
 }
 .btn-pastel-red:hover, .btn-pastel-red:focus {
@@ -29,7 +32,10 @@
     font-weight: 600;
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     transition: background 0.2s, color 0.2s;
-    padding: 0.5em 1.2em;
+    display: inline-block !important;
+    min-width: 140px !important;
+    text-align: center !important;
+    padding: 0.8rem 1rem !important;
     cursor: pointer;
 }
 .btn-pastel-green:hover, .btn-pastel-green:focus {
@@ -321,16 +327,26 @@ body.dark .category-badge-table {
 }
 
 .btn-pastel, .delete-expenses-btn {
+  display: inline-block !important;
+  min-width: 140px !important;
+  text-align: center !important;
   background: var(--mint) !important;
   color: #222 !important;
   border: none !important;
   border-radius: 0.5rem !important;
   box-shadow: 0 2px 8px 0 rgba(108, 189, 160, 0.13) !important;
-  padding: 0.5rem 1.25rem !important;
+  padding: 0.8rem 1rem !important;
   font-weight: 600 !important;
   font-size: 1rem !important;
   transition: background 0.2s, box-shadow 0.2s !important;
   font-family: 'Montserrat', 'Segoe UI', sans-serif !important;
+}
+
+@media (max-width: 480px) {
+  .btn-pastel, .delete-expenses-btn, .btn-pastel-red, .btn-pastel-green {
+    min-width: auto !important;
+    padding: 0.5rem 1rem !important;
+  }
 }
 .btn-pastel:hover, .btn-pastel:focus,
 .delete-expenses-btn:hover, .delete-expenses-btn:focus {
@@ -346,7 +362,10 @@ body.dark .category-badge-table {
   border: 2px solid var(--mint) !important;
   border-radius: 0.75rem !important;
   box-shadow: 0 2px 8px 0 rgba(108, 189, 160, 0.15) !important;
-  padding: 0.75rem 1.5rem !important;
+  display: inline-block !important;
+  min-width: 140px !important;
+  text-align: center !important;
+  padding: 0.8rem 1rem !important;
   font-weight: 700 !important;
   font-size: 1rem !important;
   transition: all 0.2s ease !important;
