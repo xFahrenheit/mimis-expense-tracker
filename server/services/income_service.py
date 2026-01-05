@@ -107,40 +107,6 @@ def delete_income_record(record_id):
         print(f"Error deleting income record: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-def get_monthly_income(year, month):
-    """Get the total monthly income for a specific month/year"""
-    try:
-        target_date = date(year, month, 1)
-        
-        with get_db_connection() as conn:
-            cursor = conn.execute('''
-                SELECT amount, start_date, end_date
-                FROM income_records
-                WHERE start_date <= ? AND (end_date IS NULL OR end_date >= ?)
-            ''', (target_date.isoformat(), target_date.isoformat()))
-            
-            records = cursor.fetchall()
-            total_income = 0
-            
-            for record in records:
-                amount = record[0]
-                start_date = datetime.fromisoformat(record[1]).date()
-                end_date = datetime.fromisoformat(record[2]).date() if record[2] else None
-                
-                # Check if this income record applies to the target month
-                if start_date <= target_date and (end_date is None or end_date >= target_date):
-                    total_income += amount
-            
-            return jsonify({
-                'success': True, 
-                'year': year,
-                'month': month,
-                'total_income': total_income
-            })
-    except Exception as e:
-        print(f"Error getting monthly income: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 def get_income_distribution(start_date=None, end_date=None):
     """Get income distribution data for charts/analytics"""
     try:
@@ -207,8 +173,13 @@ def get_income_distribution(start_date=None, end_date=None):
                         record_start = datetime.fromisoformat(record[2]).date()
                         record_end = datetime.fromisoformat(record[3]).date() if record[3] else None
                         
-                        # Check if this record applies to current month
-                        if record_start <= current_date and (record_end is None or record_end >= current_date):
+                        # Check if this record applies to current month (compare year/month only)
+                        record_start_ym = (record_start.year, record_start.month)
+                        record_end_ym = (record_end.year, record_end.month) if record_end else None
+                        current_ym = (current_date.year, current_date.month)
+                        
+                        # Record applies if: start <= current AND (no end OR end >= current)
+                        if record_start_ym <= current_ym and (record_end_ym is None or record_end_ym >= current_ym):
                             month_income += amount
                             month_sources[source] = month_sources.get(source, 0) + amount
                             source_totals[source] = source_totals.get(source, 0) + amount
@@ -289,8 +260,6 @@ def add_monthly_income_override(year, month, user, amount, notes=''):
 def get_monthly_income_with_overrides(year, month):
     """Get monthly income considering both regular records and manual overrides"""
     try:
-        target_date = date(year, month, 1)
-        
         with get_db_connection() as conn:
             # First check for manual override
             cursor = conn.execute('''
@@ -311,11 +280,11 @@ def get_monthly_income_with_overrides(year, month):
                 })
             
             # No override, calculate from regular records
+            # Get all records and filter by year/month only
             cursor = conn.execute('''
                 SELECT amount, source, start_date, end_date
                 FROM income_records
-                WHERE start_date <= ? AND (end_date IS NULL OR end_date >= ?)
-            ''', (target_date.isoformat(), target_date.isoformat()))
+            ''')
             
             records = cursor.fetchall()
             total_income = 0
@@ -324,11 +293,16 @@ def get_monthly_income_with_overrides(year, month):
             for record in records:
                 amount = record[0]
                 source = record[1]
-                start_date = datetime.fromisoformat(record[2]).date()
-                end_date = datetime.fromisoformat(record[3]).date() if record[3] else None
+                record_start = datetime.fromisoformat(record[2]).date()
+                record_end = datetime.fromisoformat(record[3]).date() if record[3] else None
                 
-                # Check if this income record applies to the target month
-                if start_date <= target_date and (end_date is None or end_date >= target_date):
+                # Compare year/month only
+                record_start_ym = (record_start.year, record_start.month)
+                record_end_ym = (record_end.year, record_end.month) if record_end else None
+                target_ym = (year, month)
+                
+                # Record applies if: start <= target AND (no end OR end >= target)
+                if record_start_ym <= target_ym and (record_end_ym is None or record_end_ym >= target_ym):
                     total_income += amount
                     sources.append({'source': source, 'amount': amount})
             
